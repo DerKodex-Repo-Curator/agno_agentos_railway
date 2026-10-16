@@ -11,7 +11,7 @@ Two rules when adding a case (machinery and guards: `evals/hooks.py`):
 
 - Hooks: add `**BUILDER_HOOKS` on any case that can reach the builder's ungated
   create/edit/publish tools; add `**LEARNING_HOOKS` on every other case probing a
-  learning-store component (`agno`, `os-manager-internal`, `os-manager-internal`). The
+  learning-store user agent. Every OS Manager case uses builder hooks. The
   teardown hard-deletes what the case created, even on timeout.
 - Fixtures: use names no real team would have on file — the sweep removes rows the
   case created, but cannot undo an edit inside a row that already existed.
@@ -21,6 +21,8 @@ Results are stored in Postgres via `eval_db` and are visible at os.agno.com.
 Add a case below, tag it (`smoke`, `release`, `live`), then run:
 `python -m evals --tag <tag>`
 """
+
+from copy import copy
 
 from agno.eval import Case
 
@@ -44,28 +46,30 @@ from evals.hooks import (  # noqa: F401
     snapshot_schedule_ids,
 )
 
+assert manager_team is not None
+# Share the configured resources; copying HTTP clients creates invalid handles.
+# Only the eval copy's default identity differs from the served manager.
+_memory_team = copy(manager_team)
+_memory_team.user_id = "railway-eval-quillhawk"
+
 CASES: tuple[Case, ...] = (
-    # Agno — capture: the fact lands in the entity graph (reliability) and the
-    # reply confirms it briefly (judge). The snapshot-diff teardown removes
-    # whatever the case wrote to the shared stores.
+    # Use an eval-only copy with a user: the suite runner supplies a session but
+    # no identity, and OS Manager correctly disables per-user memory without one.
+    # Never change the served manager's default user during a scheduled eval.
     Case(
         name="agno_captures_project_fact",
-        team=manager_team,
-        input="Remember: Wilhelmina Ashgrove-Petrov is leading the Quillhawk-Meridian rollout.",
+        team=_memory_team,
+        input="Remember for future conversations: I lead the Quillhawk-Meridian rollout.",
         tags=("smoke", "release"),
         timeout_seconds=90,
         **BUILDER_HOOKS,
         criteria=(
-            "Briefly confirms it recorded that Wilhelmina Ashgrove-Petrov leads the "
+            "Briefly confirms it recorded that the user leads the "
             "Quillhawk-Meridian rollout. Does not invent extra facts beyond the message, "
             "does not interrogate the user, and does not claim it cannot remember things."
         ),
     ),
-    # Agno — live web: outside-world questions get searched and grounded, never
-    # answered from prior knowledge. Live because correctness depends on today's web.
-    # The subject is real on the web but off any team's entity directory — the fixture
-    # rule holds for live probes too, since a merge into a pre-existing entity cannot
-    # be undone by the teardown.
+    # Live Company Source retrieval; correctness depends on the release page.
     Case(
         name="agno_answers_from_live_web",
         team=manager_team,
@@ -85,7 +89,7 @@ CASES: tuple[Case, ...] = (
     Case(
         name="manager_team_lists_registered_agents",
         team=manager_team,
-        input="Which agents are registered in this AgentOS instance?",
+        input="Read app/main.py and list the application agents and the OS Manager team, noting conditional executors.",
         tags=("smoke", "release"),
         timeout_seconds=90,
         **BUILDER_HOOKS,
@@ -234,8 +238,7 @@ CASES: tuple[Case, ...] = (
     ),
     # --- Your cases — authored by /create-evals ---
     # Agno — honesty with nothing on file: a recall probe for something never discussed
-    # must produce a grounded no (says what it holds and searched — the entity
-    # directory and its notes), never a fabricated status. Instructions: "a grounded no".
+    # must check the available Company records or memory and never fabricate status.
     Case(
         name="agno_grounded_no_on_unknown",
         team=manager_team,

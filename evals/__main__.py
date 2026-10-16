@@ -22,11 +22,16 @@ Both log to Postgres through `eval_db`. Connect your AgentOS at os.agno.com to s
 
 # Hydrate os.environ from .env before any module that reads env at import time
 # (db_url, model factories, etc.). Pre-existing shell vars take precedence.
+from os import environ
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+# Standalone evals assemble the manager but serve no HTTP listener. Keep the
+# documented local command usable without a production JWT verification key.
+if __name__ == "__main__":
+    environ.setdefault("RUNTIME_ENV", "dev")
 
 import sys  # noqa: E402
 

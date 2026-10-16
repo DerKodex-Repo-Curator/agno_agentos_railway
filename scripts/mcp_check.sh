@@ -5,7 +5,7 @@
 #    MCP Smoke Check
 #
 #    Runs the AgentOS MCP endpoint end to end: handshake, tool surface,
-#    then one run_agent call. The default question tells the agent to skip
+#    then one agno call. The default question tells the agent to skip
 #    its tools, so the whole check finishes in seconds. Runs the client
 #    inside the container.
 #
@@ -46,7 +46,7 @@ EXPECTED_TOOLS="${MCP_EXPECTED_TOOLS:-9}"
 echo ""
 echo -e "${ORANGE}▸${NC} ${BOLD}MCP Check${NC}"
 echo ""
-echo -e "${DIM}> http://localhost:8000/mcp  (client: host when MCP_CHECK_HOST=1, otherwise agentos-api)${NC}"
+echo -e "${DIM}> ${AGENTOS_URL:-http://localhost:8000}/mcp  (client: host when MCP_CHECK_HOST=1, otherwise agentos-api)${NC}"
 echo ""
 
 runner=(docker compose exec -T agentos-api python)
@@ -93,7 +93,7 @@ async def run_check(headers: dict | None, auth_note: str) -> None:
             await session.initialize()
             step(f"Handshake — {auth_note}")
             names = sorted(tool.name for tool in (await session.list_tools()).tools)
-            # Assert before spending the run_agent call: if the surface is wrong the
+            # Assert before spending the agno call: if the surface is wrong the
             # answer proves nothing, and naming what was actually served is the whole
             # diagnostic — a count alone can't tell a scoped config from a regression.
             if len(names) != EXPECTED_TOOLS:
@@ -111,7 +111,7 @@ async def run_check(headers: dict | None, auth_note: str) -> None:
                 raise RuntimeError(str(result.content))
             elapsed = time.perf_counter() - start
             step(f"agno — OS Manager answered in {elapsed:.1f}s")
-            # run_agent returns a trimmed ToolResult: content[0].text is the plain
+            # agno returns a trimmed ToolResult: content[0].text is the plain
             # answer, and structuredContent carries {run_id, session_id, status}.
             print(flush=True)
             print(f"{DIM}Agent response:{NC}", flush=True)

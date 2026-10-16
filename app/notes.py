@@ -31,8 +31,8 @@ replaced: append_file creates a note or adds to it.\
 def get_shared_notes_tools() -> list[Toolkit]:
     """The shared notebook for built components: read, append, list, search, check.
 
-    No write, replace, move, or delete: those retire a colleague's work and stay
-    with Agno, which carries the full toolkit.
+    No write, replace, move, or delete: those retire a colleague's work.
+    Application maintenance code can use the full FileSystem object explicitly.
     """
     return [
         notes.tools(
