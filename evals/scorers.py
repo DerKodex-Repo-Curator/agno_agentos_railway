@@ -246,7 +246,10 @@ def health(run: Any, db: Any) -> None:
     )
     output = str(run.content).replace("**", "")
     overall = re.search(r"Overall: \*\*(PASS|WARN|FAIL)\*\*", report)
-    require(overall and overall[1] in output, "Answer omits the actual overall status")
+    require(
+        overall and re.search(rf"(?i)overall[^\n]{{0,40}}\b{overall[1]}\b", output),
+        "Answer omits or misreports the actual overall status",
+    )
     for check in ("Database", "Runtime"):
         status = re.search(r"\*\*(PASS|WARN|FAIL)\*\* " + check + ":", report)
         require(
@@ -263,7 +266,12 @@ def component_id(result: Any) -> str | None:
 
 
 def published(
-    name: str, *, renamed_from: str | None = None, tools_required: bool = False, model_id: str | None = None
+    name: str,
+    *,
+    renamed_from: str | None = None,
+    tools_required: bool = False,
+    model_id: str | None = None,
+    instruction_patterns: tuple[str, ...] = (),
 ) -> Callable[[Any, Any], None]:
     def check(run: Any, db: Any) -> None:
         created = calls(run, "create_agent", db)
@@ -282,6 +290,11 @@ def published(
         )
         require(component_id(payload(created[0], db)) == row["component_id"], "Stored ID differs from creation result")
         spec = config["config"]
+        instructions = json.dumps(spec.get("instructions") or "")
+        require(
+            all(re.search(pattern, instructions, re.IGNORECASE) for pattern in instruction_patterns),
+            "Published instructions omit requested behavior",
+        )
         require(spec.get("model"), "Stored component lacks a model")
         if model_id:
             require(spec["model"].get("id") == model_id, "Stored agent does not use the default model")

@@ -116,6 +116,38 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
                 db,
             )
 
+    def test_health_cannot_use_a_warning_elsewhere_to_hide_wrong_overall_status(self):
+        db = MagicMock()
+        result = {
+            "workflow_id": "deployment-check",
+            "status": "completed",
+            "run_id": "health-run",
+            "content": "Overall: **WARN**\n**PASS** Database: connected\n**WARN** Runtime: dev",
+        }
+        db.get_run.return_value = {"run_data": result}
+        response = run(tool("run_workflow", result), content="Overall: PASS\nDatabase PASS\nRuntime WARN")
+        with self.assertRaises(AssertionError):
+            health(response, db)
+        response.content = "Overall: WARN\nDatabase PASS\nRuntime WARN"
+        health(response, db)
+
+    def test_publication_without_requested_instructions_fails(self):
+        db = MagicMock()
+        db.list_components.return_value = ([{"component_id": "a", "current_version": 1}], 1)
+        spec = {"name": "Recipes", "model": "default", "instructions": "Do arithmetic"}
+        config = {
+            "stage": "published",
+            "version": 1,
+            "config": spec,
+        }
+        db.get_config.return_value = config
+        response = run(tool("create_agent", {"component_id": "a"}), content="Published the recipe agent")
+        check = published("Recipes", instruction_patterns=(r"recipe", r"\b(three|3)\b", r"\b(source|link|url)s?\b"))
+        with self.assertRaises(AssertionError):
+            check(response, db)
+        spec["instructions"] = "Find three recipes and include source links."
+        check(response, db)
+
     def test_draft_and_wrong_published_pointer_fail(self):
         db = MagicMock()
         row = {"component_id": "a", "current_version": 1}

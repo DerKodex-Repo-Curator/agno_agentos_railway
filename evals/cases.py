@@ -111,7 +111,12 @@ CASES: tuple[Case, ...] = (
         "for recipes and answers with three options, each with a source link. "
         "Use the registry's web search tool and default model. Fully specified; make it "
         "runnable now, without running it.",
-        published("Quillhawk Recipe Scout", tools_required=True, model_id=default_model().id),
+        published(
+            "Quillhawk Recipe Scout",
+            tools_required=True,
+            model_id=default_model().id,
+            instruction_patterns=(r"recipe", r"\b(three|3)\b", r"\b(source|link|url)s?\b"),
+        ),
         readonly=False,
         criteria="Reports the agent created and published, without claiming a test run or leaving publication pending.",
     ),
@@ -120,7 +125,12 @@ CASES: tuple[Case, ...] = (
         "Create and publish an agent named 'Quillhawk Scratch Pad' that summarizes pasted "
         "text. Default model, no tools. "
         "Then rename that same agent to 'Quillhawk Note Pad' and publish the rename. Do not run it.",
-        published("Quillhawk Note Pad", renamed_from="Quillhawk Scratch Pad", model_id=default_model().id),
+        published(
+            "Quillhawk Note Pad",
+            renamed_from="Quillhawk Scratch Pad",
+            model_id=default_model().id,
+            instruction_patterns=(r"summari[sz]",),
+        ),
         readonly=False,
         tags=("release",),
         timeout=180,
