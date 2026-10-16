@@ -135,7 +135,10 @@ image follows the framework cookbook's pinned Python 3.12 base.
 Agno and the sandbox currently pin main commit `2dec52a7e7bf202c3913b1d442220227525ce73a`.
 Move both pins to a release when available. Direct executor runs are separate from
 Company accepting and dispatching sandboxed Tasks; that integration awaits Company
-PR 7.2. Do not treat a passing direct run as proof of the Company engineering loop.
+PR 7.2. After updating the pin, declare a matching GitHub git Source for the executor's
+repository before accepting engineering Tasks; the current Source reads the local
+application. Task checkout projection and the single-engineering-execution gate need
+that integration too. Do not treat a passing direct run as proof of the Company engineering loop.
 
 ## Manual Setup
 
