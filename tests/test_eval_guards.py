@@ -160,6 +160,30 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AssertionError):
             onboarding(response, None)
 
+    def test_rename_preserves_configuration_and_published_history(self):
+        db = MagicMock()
+        db.list_components.return_value = ([{"component_id": "original", "current_version": 2}], 1)
+        first = {
+            "stage": "published",
+            "version": 1,
+            "config": {"name": "Before", "model": "default", "instructions": "Summarize"},
+        }
+        final = {
+            "stage": "published",
+            "version": 2,
+            "config": {"name": "After", "model": "default", "instructions": "Summarize"},
+        }
+        response = run(
+            tool("create_agent", {"data": {"id": "original"}}),
+            tool("edit_agent", {"data": {"id": "original"}}, {"agent_id": "original"}),
+        )
+        db.get_config.side_effect = [final, first]
+        published("After", renamed_from="Before")(response, db)
+        final["config"] = {"name": "After", "model": "default", "instructions": "Do something else"}
+        db.get_config.side_effect = [final, first]
+        with self.assertRaises(AssertionError):
+            published("After", renamed_from="Before")(response, db)
+
     def test_read_file_must_match_and_succeed(self):
         for candidate in (
             tool("read_file", "content", {"path": "tmp/answers.md"}),

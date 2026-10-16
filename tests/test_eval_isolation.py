@@ -119,6 +119,7 @@ assert not any(type(t).__name__ == 'KnowledgeManagementTools' for t in manager_t
         self.assertEqual(self.databases(), before)
 
     async def test_readonly_gate_detects_real_company_and_notebook_writes(self):
+        from agno.company import CompanyManager
         from agno.db.postgres import PostgresDb
         from agno.fs import FileSystem
 
@@ -127,7 +128,19 @@ assert not any(type(t).__name__ == 'KnowledgeManagementTools' for t in manager_t
             try:
                 db = PostgresDb(db_engine=owned)
                 db.create_product({"id": "sentinel", "name": "Sentinel", "created_at": 1})
+                company = CompanyManager(db)
+                company.get_wiki()
+                company.get_wiki("sentinel")
                 scorer = Behavior(db, lambda run, db: None)
+                scorer.setup()
+                company.read_wiki(None, "status.md")
+                company.read_wiki("sentinel", "status.md")
+                response = SimpleNamespace(tools=[], member_responses=[], content="I did not change anything")
+                self.assertTrue((await scorer.ascore(response)).passed)
+                company.write_wiki(
+                    product_id="sentinel", path="status.md", content="unexpected update", expected_version=1
+                )
+                self.assertFalse((await scorer.ascore(response)).passed)
                 scorer.setup()
                 db.create_project(
                     {
@@ -138,7 +151,6 @@ assert not any(type(t).__name__ == 'KnowledgeManagementTools' for t in manager_t
                         "created_at": 1,
                     }
                 )
-                response = SimpleNamespace(tools=[], member_responses=[], content="I did not change anything")
                 self.assertFalse((await scorer.ascore(response)).passed)
                 scorer.setup()
                 FileSystem(db, namespace="shared-notes").write("unexpected.txt", "unexpected note")

@@ -24,6 +24,11 @@ _memory_team.user_id = "railway-eval-quillhawk"
 _db = get_postgres_db()
 
 
+def registered_agents(run, db):
+    read_file("app/main.py")(run, db)
+    searched("list_teams")(run, db)
+
+
 def case(name, prompt, check, *, tags=("smoke", "release"), criteria, readonly=True, allow_run=False, timeout=120):
     scorer = Behavior(_db, check, readonly=readonly, allow_run=allow_run)
     return Case(
@@ -62,9 +67,9 @@ CASES: tuple[Case, ...] = (
     ),
     case(
         "manager_team_lists_registered_agents",
-        "Read app/main.py and list the application agents and OS Manager team, noting "
-        "conditional executors. Do not change anything.",
-        read_file("app/main.py"),
+        "Read app/main.py and check the team roster. List the application agents and OS Manager team "
+        "with their IDs, noting conditional executors. Do not change anything.",
+        registered_agents,
         criteria=(
             "Names OS Manager (os-manager-internal), company-analyst, and the "
             "conditional engineering executors, grounded in app/main.py."

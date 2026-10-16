@@ -238,6 +238,7 @@ def health(run: Any, db: Any) -> None:
         stored and stored.get("run_data", {}).get("workflow_id") == "deployment-check",
         "Workflow run not persisted under the returned ID",
     )
+    require(str(stored["run_data"].get("status")).lower() == "completed", "Persisted workflow run did not complete")
     report = str(result.get("content", ""))
     require(report and "Database" in report and "Runtime" in report, "Workflow result lacks actual check details")
     require(
@@ -307,6 +308,10 @@ def published(
             )
             first = db.get_config(row["component_id"], version=1)
             require(first and first["config"].get("name") == renamed_from, "Original name absent from version history")
+            require(first.get("stage") == "published", "Original version was never published")
+            original = {key: value for key, value in first["config"].items() if key not in {"name", "metadata"}}
+            renamed = {key: value for key, value in spec.items() if key not in {"name", "metadata"}}
+            require(original == renamed, "Rename changed configuration beyond its name and audit metadata")
             require(not any(r.get("name") == renamed_from for r in components), "Original-name duplicate remains")
 
     return check

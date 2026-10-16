@@ -22,6 +22,7 @@ async def main() -> int:
             evidence.write_text("")
             os.environ["RAILWAY_EVAL_EVIDENCE"] = str(evidence)
 
+    from agno.company import CompanyManager
     from agno.company.bootstrap import arehydrate_product
     from agno.eval import acli
     from agno.os.utils import collect_mcp_tools_from_registry, collect_mcp_tools_from_team
@@ -40,6 +41,12 @@ async def main() -> int:
             if source.type == "git":
                 source.reference = str(Path.cwd())
         await arehydrate_product(db, product, registry)
+    # Company lazily creates its default wiki pages on first read. Initialize
+    # those fixtures before snapshots; later edits remain visible to the scorer.
+    company = CompanyManager(db)
+    company.get_wiki()
+    for product in products:
+        company.get_wiki(product.id)
     register_schedules()
     assert manager_team is not None
     mcp_tools: list = []

@@ -15,14 +15,14 @@ Preconditions: Postgres on 5432, venv active (`source .venv/bin/activate`; `./sc
 
 ## 1. Pick the agent
 
-The user's choice, or the least-covered component — almost always one of theirs. Source components have a file under `agents/` or `teams/`. Studio-built components have none: `Agent.load("<id>", db=eval_db, registry=registry, published_only=True)` (or `Team.load`) rehydrates the published config at import time; it returns `None` for an archived or unpublished component, and a `Case` with neither field set raises — guard the load or the whole suite fails at import. Workflows cannot be case targets.
+The user's choice, or the least-covered component — almost always one of theirs. Source components have a file under `agents/` or `teams/`. Studio-built components have none: `Agent.load("<id>", db=get_postgres_db(), registry=registry, published_only=True)` (or `Team.load`) rehydrates the published config at import time; it returns `None` for an archived or unpublished component, and a `Case` with neither field set raises — guard the load or the whole suite fails at import. Workflows cannot be case targets.
 
 ## 2. Map what it promises
 
-Read the file (or the published config: `eval_db.get_config(component_id="<id>")["config"]`). Every "always", "never", "use X for Y" is a case. Note the tools for reliability assertions.
+Read the file (or the published config: `get_postgres_db().get_config(component_id="<id>")["config"]`). Every "always", "never", "use X for Y" is a case. Note the tools for reliability assertions.
 
 Run every case through `python -m evals`; the worker requires an owned disposable
-schema. Define fixtures in that database, including published configs needed by
+database. Define fixtures in that database, including published configs needed by
 Studio-built agents; never load or mutate an operator's live components as fixtures.
 Use `Behavior` from `evals/scorers.py` for read-only state/attempt checks, or a scorer
 that verifies the requested stored mutation. No snapshot/diff deletion hooks remain.
