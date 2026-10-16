@@ -61,6 +61,19 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
             result = await scorer.ascore(run(members=[run(tool("publish_component", {"ok": True}))]))
         self.assertFalse(result.passed)
 
+    async def test_readonly_diagnostics_are_not_component_execution(self):
+        for name, allowed in (("run_diagnostics", True), ("run_agent", False), ("run_workflow", False)):
+            scorer = Behavior(None, lambda r, db: None)
+            with patch("evals.scorers.business_state", return_value={}):
+                scorer.setup()
+                result = await scorer.ascore(run(tool(name, {"ok": True})))
+            self.assertEqual(result.passed, allowed, name)
+        scorer = Behavior(None, lambda r, db: None)
+        with patch("evals.scorers.business_state", side_effect=[{}, {"fs.agno_fs": ["unexpected write"]}]):
+            scorer.setup()
+            result = await scorer.ascore(run(tool("run_diagnostics", {"ok": True})))
+        self.assertFalse(result.passed)
+
     def test_health_prose_and_wrong_workflow_cannot_pass(self):
         db = MagicMock()
         for response in (

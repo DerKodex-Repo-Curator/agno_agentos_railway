@@ -99,6 +99,7 @@ class Behavior:
                     if t.tool_name.startswith(MUTATIONS)
                     or (
                         t.tool_name.startswith("run_")
+                        and t.tool_name != "run_diagnostics"
                         and not (
                             self.allow_run
                             and t.tool_name == "run_workflow"
@@ -154,7 +155,9 @@ class Behavior:
                     unrelated(self.before or {}) == unrelated(after), "Studio request changed unrelated durable state"
                 )
                 require(
-                    not any(t.tool_name.startswith("run_") for t in tool_calls(run)),
+                    not any(
+                        t.tool_name.startswith("run_") and t.tool_name != "run_diagnostics" for t in tool_calls(run)
+                    ),
                     "Component was run despite the no-run request",
                 )
             self.check(run, self.db)
