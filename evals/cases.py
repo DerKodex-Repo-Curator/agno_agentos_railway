@@ -111,7 +111,9 @@ CASES: tuple[Case, ...] = (
             "Reports the latest deployment-check result grounded in the tool output (overall status and "
             "at least one specific check), or, when no run is recorded, runs the deployment check on "
             "demand and reports the fresh result. Does not merely tell the user how to run it, and does "
-            "not fabricate a report."
+            "not fabricate a report. Framework run_diagnostics is a separate report: its check_id "
+            "and configuration checks must not be presented as a deployment-check workflow run. "
+            "A response based only on run_diagnostics fails this case."
         ),
     ),
     # OS Manager — first-run onboarding should make the platform feel self-describing.
