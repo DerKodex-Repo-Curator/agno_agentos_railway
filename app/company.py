@@ -73,6 +73,8 @@ products = [
                     "No delivery destination is configured; do not claim external delivery."
                 ),
             ),
-        ],
+        ]
+        if getenv("ENABLE_MAINTENANCE", "").lower() == "true"
+        else [],
     ),
 ]

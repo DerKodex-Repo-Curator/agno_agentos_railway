@@ -95,7 +95,7 @@ def _check_runtime() -> CheckResult:
 def _check_openai_key() -> CheckResult:
     """The one env var whose absence every other check survives."""
     if getenv("OPENAI_API_KEY"):
-        return _pass("OpenAI key", "Set — models, knowledge embeddings, and the registry's media tools.")
+        return _pass("OpenAI key", "Set — models and knowledge embeddings; media tools require explicit opt-in.")
     return _fail(
         "OpenAI key",
         "OPENAI_API_KEY is not set: every model call fails, knowledge cannot embed, and the "

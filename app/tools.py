@@ -36,12 +36,12 @@ def get_parallel_tools() -> list[ParallelTools | MCPTools]:
 
 
 def get_slack_tools() -> list[SlackTools]:
-    """Send-scoped Slack toolkit, only when the Slack interface is configured.
+    """Send-scoped Slack toolkit, explicitly opted in with a bot token.
 
     Deliberately narrower than the SlackTools defaults: a registry any agent
     can draw from gets post + channel listing, never history reads or file transfer.
     """
-    if not getenv("SLACK_BOT_TOKEN"):
+    if getenv("ENABLE_SLACK_TOOLS", "").lower() != "true" or not getenv("SLACK_BOT_TOKEN"):
         return []
     return [
         SlackTools(
@@ -57,7 +57,7 @@ def get_slack_tools() -> list[SlackTools]:
 
 
 def get_media_tools() -> list[OpenAITools]:
-    """Image generation and text-to-speech on the platform's existing OpenAI key.
+    """Opt-in image generation and text-to-speech on the existing OpenAI key.
 
     Generated media come back as run artifacts (bytes on the RunResponse), so they
     persist in Postgres and survive ephemeral container filesystems. Transcription
@@ -65,7 +65,7 @@ def get_media_tools() -> list[OpenAITools]:
     platform never have.
     """
     # OpenAITools raises without the key; the registry import must not.
-    if not getenv("OPENAI_API_KEY"):
+    if getenv("ENABLE_MEDIA_TOOLS", "").lower() != "true" or not getenv("OPENAI_API_KEY"):
         return []
     return [OpenAITools(enable_transcription=False, image_model="gpt-image-2")]
 
@@ -76,5 +76,5 @@ def get_file_generation_tools() -> list[FileGenerationTools]:
 
 
 def get_knowledge_management_tools() -> KnowledgeManagementTools:
-    """The write side of the product knowledge base, mounted on OS Manager."""
+    """Operator ingestion helper for setup skills; not exposed to OS Manager."""
     return KnowledgeManagementTools(knowledge=product_knowledge)

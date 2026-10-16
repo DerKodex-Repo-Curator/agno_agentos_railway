@@ -44,7 +44,10 @@ def engineering_agents() -> list[BaseExternalAgent]:
     provider = sandbox_provider()
     if provider is None:
         return []
-    repository = Repository("https://github.com/agno-agi/agno", branch="main")
+    repository_url = getenv("SANDBOX_REPOSITORY")
+    if not repository_url:
+        raise ValueError("SANDBOX_REPOSITORY is required when engineering sandboxes are enabled")
+    repository = Repository(repository_url, branch=getenv("SANDBOX_BRANCH") or "main")
     return [
         CodexAgent(
             id="codex-engineer",

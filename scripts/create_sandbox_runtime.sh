@@ -3,10 +3,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${SANDBOX_IMAGE:?Set SANDBOX_IMAGE to the pushed ECR image URI}"
-export AWS_PROFILE="${AWS_PROFILE:-agno-staging-agentcore}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
-export SANDBOX_RUNTIME_NAME="${SANDBOX_RUNTIME_NAME:-agno_company_engineer}"
-export SANDBOX_EXECUTION_ROLE="${SANDBOX_EXECUTION_ROLE:-arn:aws:iam::175651002206:role/agno-agentcore-runtime-staging}"
+ : "${SANDBOX_RUNTIME_NAME:?Set a unique SANDBOX_RUNTIME_NAME for this deployment}"
+export SANDBOX_RUNTIME_NAME
+: "${SANDBOX_EXECUTION_ROLE:?Set SANDBOX_EXECUTION_ROLE to your runtime IAM role ARN}"
+export SANDBOX_EXECUTION_ROLE
 exec uv run --no-project --with-requirements requirements.txt python - <<'PY'
 import os
 import re
@@ -14,8 +15,8 @@ import time
 import boto3
 
 name = os.environ["SANDBOX_RUNTIME_NAME"]
-if not re.fullmatch(r"agno_[A-Za-z0-9_]+", name):
-    raise SystemExit("SANDBOX_RUNTIME_NAME must start with agno_ and contain only letters, digits and underscores")
+if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,47}", name):
+    raise SystemExit("SANDBOX_RUNTIME_NAME must start with a letter, contain only letters, digits and underscores, and be at most 48 characters")
 control = boto3.Session(region_name=os.environ["AWS_REGION"]).client("bedrock-agentcore-control")
 config = dict(
     agentRuntimeArtifact={"containerConfiguration": {"containerUri": os.environ["SANDBOX_IMAGE"]}},
