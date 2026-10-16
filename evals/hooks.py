@@ -54,20 +54,24 @@ def business_state(db: Any) -> dict[str, list[str]]:
 
 def record_evidence(context: Any, result: Any) -> None:
     """Keep the full run next to an explicit JSON report before ephemeral data is dropped."""
-    save_run(result.name, result.response, result.error)
+    from db import get_postgres_db
+
+    save_run(result.name, result.response, result.error, db=get_postgres_db())
 
 
-def save_run(name: str, response: Any, error: str | None = None) -> None:
+def save_run(name: str, response: Any, error: str | None = None, *, db: Any = None) -> None:
     if destination := os.getenv("RAILWAY_EVAL_EVIDENCE"):
+        evidence = {"case": name, "error": error, "response": response.to_dict() if response else None}
+        if response is not None and db is not None:
+            from evals.scorers import payload, tool_calls
+
+            try:
+                evidence["resolved_tools"] = [
+                    {"name": tool.tool_name, "arguments": tool.tool_args, "result": payload(tool, db)}
+                    for tool in tool_calls(response, db)
+                ]
+            except Exception as exc:
+                # Keep the raw failed run even if its child evidence cannot be read.
+                evidence["tool_evidence_error"] = str(exc)
         with Path(destination).open("a") as stream:
-            stream.write(
-                json.dumps(
-                    {
-                        "case": name,
-                        "error": error,
-                        "response": response.to_dict() if response else None,
-                    },
-                    default=str,
-                )
-                + "\n"
-            )
+            stream.write(json.dumps(evidence, default=str) + "\n")

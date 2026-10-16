@@ -3,20 +3,41 @@
 import json
 import re
 from collections.abc import Callable, Iterator
+from copy import deepcopy
 from typing import Any
 from uuid import uuid4
 
 from agno.offload import ResultStore
+from agno.run.agent import RunOutput
 from agno.scorer.base import Score
 from sqlalchemy import text
 
 from evals.hooks import business_state, save_run
 
 
-def tool_calls(run: Any) -> Iterator[Any]:
+def tool_calls(run: Any, db: Any = None, seen: set[str] | None = None) -> Iterator[Any]:
+    seen = set() if seen is None else seen
     yield from run.tools or []
     for member in getattr(run, "member_responses", None) or []:
-        yield from tool_calls(member)
+        yield from tool_calls(member, db, seen)
+    # Standalone application-agent dispatch is not a team member response. Follow
+    # its persisted run so a plausible child answer cannot replace tool evidence.
+    for tool in run.tools or []:
+        if db is None or tool.tool_name != "run_agent" or not successful(tool, db):
+            continue
+        result = payload(tool, db)
+        require(isinstance(result, dict) and result.get("run_id"), "Dispatched agent lacks a run ID")
+        if result["run_id"] in seen:
+            continue
+        seen.add(result["run_id"])
+        stored = db.get_run(result["run_id"], deserialize=False)
+        data = (stored or {}).get("run_data", {})
+        require(
+            data.get("agent_id") == (tool.tool_args or {}).get("agent_id")
+            and str(data.get("status", "")).lower() == "completed",
+            "Dispatched agent run is missing, incomplete or belongs to another agent",
+        )
+        yield from tool_calls(RunOutput.from_dict(deepcopy(data)), db, seen)
 
 
 def payload(tool: Any, db: Any = None) -> Any:
@@ -48,7 +69,7 @@ def successful(tool: Any, db: Any = None) -> bool:
 
 
 def calls(run: Any, name: str, db: Any) -> list[Any]:
-    return [tool for tool in tool_calls(run) if tool.tool_name == name and successful(tool, db)]
+    return [tool for tool in tool_calls(run, db) if tool.tool_name == name and successful(tool, db)]
 
 
 def require(condition: Any, message: str) -> None:
@@ -82,8 +103,17 @@ MUTATIONS = (
 
 
 class Behavior:
-    def __init__(self, db: Any, check: Callable[[Any, Any], None], *, readonly: bool = True, allow_run: bool = False):
+    def __init__(
+        self,
+        db: Any,
+        check: Callable[[Any, Any], None],
+        *,
+        readonly: bool = True,
+        allow_run: bool = False,
+        allow_agent: str | None = None,
+    ):
         self.db, self.check, self.readonly, self.allow_run = db, check, readonly, allow_run
+        self.allow_agent = allow_agent
         self.before: dict[str, list[str]] | None = None
 
     def setup(self) -> None:
@@ -95,11 +125,16 @@ class Behavior:
             if self.readonly:
                 forbidden = [
                     t.tool_name
-                    for t in tool_calls(run)
+                    for t in tool_calls(run, self.db)
                     if t.tool_name.startswith(MUTATIONS)
                     or (
                         t.tool_name.startswith("run_")
                         and t.tool_name != "run_diagnostics"
+                        and not (
+                            self.allow_agent
+                            and t.tool_name == "run_agent"
+                            and (t.tool_args or {}).get("agent_id") == self.allow_agent
+                        )
                         and not (
                             self.allow_run
                             and t.tool_name == "run_workflow"
@@ -156,7 +191,8 @@ class Behavior:
                 )
                 require(
                     not any(
-                        t.tool_name.startswith("run_") and t.tool_name != "run_diagnostics" for t in tool_calls(run)
+                        t.tool_name.startswith("run_") and t.tool_name != "run_diagnostics"
+                        for t in tool_calls(run, self.db)
                     ),
                     "Component was run despite the no-run request",
                 )

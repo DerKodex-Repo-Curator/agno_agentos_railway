@@ -13,6 +13,7 @@ from evals.scorers import (
     published,
     read_file,
     recalled_fact,
+    searched,
     source_read,
     successful,
 )
@@ -73,6 +74,28 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
             scorer.setup()
             result = await scorer.ascore(run(tool("run_diagnostics", {"ok": True})))
         self.assertFalse(result.passed)
+
+    async def test_readonly_agent_dispatch_requires_persisted_child_evidence(self):
+        db = MagicMock()
+        response = run(tool("run_agent", {"run_id": "child"}, {"agent_id": "company-analyst"}))
+        child = {
+            "run_id": "child",
+            "agent_id": "company-analyst",
+            "status": "COMPLETED",
+            "tools": [{"tool_name": "read_company_source", "result": "page content", "tool_args": {}}],
+        }
+        scorer = Behavior(db, searched("read_company_source"), allow_agent="company-analyst")
+        with patch("evals.scorers.business_state", return_value={}):
+            scorer.setup()
+            db.get_run.return_value = None
+            self.assertFalse((await scorer.ascore(response)).passed)
+            db.get_run.return_value = {"run_data": child}
+            self.assertTrue((await scorer.ascore(response)).passed)
+            child["agent_id"] = "different-agent"
+            self.assertFalse((await scorer.ascore(response)).passed)
+            child["agent_id"] = "company-analyst"
+            child["tools"] = [{"tool_name": "create_company_project", "result": "created", "tool_args": {}}]
+            self.assertFalse((await scorer.ascore(response)).passed)
 
     def test_health_prose_and_wrong_workflow_cannot_pass(self):
         db = MagicMock()

@@ -29,8 +29,19 @@ def registered_agents(run, db):
     searched("list_teams")(run, db)
 
 
-def case(name, prompt, check, *, tags=("smoke", "release"), criteria, readonly=True, allow_run=False, timeout=120):
-    scorer = Behavior(_db, check, readonly=readonly, allow_run=allow_run)
+def case(
+    name,
+    prompt,
+    check,
+    *,
+    tags=("smoke", "release"),
+    criteria,
+    readonly=True,
+    allow_run=False,
+    allow_agent=None,
+    timeout=120,
+):
+    scorer = Behavior(_db, check, readonly=readonly, allow_run=allow_run, allow_agent=allow_agent)
     return Case(
         name=name,
         team=manager_team,
@@ -62,6 +73,7 @@ CASES: tuple[Case, ...] = (
         "Read the releases Source of This AgentOS: discover it, then read its selected page content. "
         "What is the latest Agno release shown there? Cite the Source.",
         source_read,
+        allow_agent="company-analyst",
         tags=("live",),
         criteria="Answers the release question with a version and a GitHub Agno releases citation.",
     ),
@@ -154,7 +166,8 @@ CASES: tuple[Case, ...] = (
         searched("list_workflows"),
         tags=("release",),
         criteria=(
-            "Identifies deployment-check and run-evals and explains their purposes without claiming to have run them."
+            "Identifies deployment-check and run-evals and explains their purposes. Reporting a roster lookup "
+            "is allowed; must not claim either workflow was executed."
         ),
     ),
     case(

@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine, text
 
 from evals.isolation import ROOT, isolated_environment, require_isolation, run_isolated, source_copy
-from evals.scorers import Behavior
+from evals.scorers import Behavior, searched
 
 
 class IsolationGuards(unittest.TestCase):
@@ -197,6 +197,45 @@ for enabled in ('', 'false', 'true'):
         with self.assertRaises(asyncio.CancelledError):
             await task
         self.assertEqual(self.databases(), before)
+
+    async def test_dispatched_source_evidence_comes_from_a_persisted_run(self):
+        from agno.db.postgres import PostgresDb
+        from agno.models.response import ToolExecution
+        from agno.run import RunStatus
+        from agno.run.agent import RunOutput
+        from agno.session import AgentSession
+
+        with isolated_environment() as (env, _):
+            owned = create_engine(self.engine.url.set(database=env["DB_DATABASE"]))
+            try:
+                db = PostgresDb(db_engine=owned)
+                db.upsert_session(
+                    AgentSession(session_id="child-session", agent_id="company-analyst", created_at=1, updated_at=1)
+                )
+                db.upsert_run(
+                    RunOutput(
+                        run_id="child",
+                        agent_id="company-analyst",
+                        status=RunStatus.completed,
+                        tools=[ToolExecution(tool_name="read_company_source", result="page content")],
+                    ),
+                    session_id="child-session",
+                )
+                response = RunOutput(
+                    tools=[
+                        ToolExecution(
+                            tool_name="run_agent",
+                            tool_args={"agent_id": "company-analyst"},
+                            result='{"run_id":"child"}',
+                        )
+                    ]
+                )
+                scorer = Behavior(db, searched("read_company_source"), allow_agent="company-analyst")
+                scorer.setup()
+                score = await scorer.ascore(response)
+                self.assertTrue(score.passed, score.reason)
+            finally:
+                owned.dispose()
 
 
 if __name__ == "__main__":

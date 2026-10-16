@@ -48,6 +48,7 @@ async def run_evals_step(_step_input: StepInput) -> StepOutput:
 run_evals = Workflow(
     id="run-evals",
     name="Run Evals",
+    description="Run the selected model eval suite in a disposable database and report passed and failed cases.",
     db=get_postgres_db(),
     steps=[Step(name="run-evals", executor=run_evals_step)],
 )

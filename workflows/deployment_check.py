@@ -374,6 +374,7 @@ async def deployment_check_step(_step_input: StepInput) -> StepOutput:
 deployment_check = Workflow(
     id="deployment-check",
     name="Deployment Check",
+    description="Check database, runtime, credentials, interfaces and schedules; return a PASS/WARN/FAIL report.",
     db=get_postgres_db(),
     steps=[Step(name="deployment-check", executor=deployment_check_step)],
 )
