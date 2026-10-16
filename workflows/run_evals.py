@@ -34,7 +34,14 @@ async def run_evals_step(_step_input: StepInput) -> StepOutput:
         for case in payload["cases"]:
             lines.append(f"- {case['name']}: {'PASS' if case['passed'] else 'FAIL'}")
             if not case["passed"]:
-                lines.append(str(case.get("error") or case.get("score_reason") or case.get("judge_reason")))
+                reasons = [case.get("error")]
+                if case.get("score_passed") is False:
+                    reasons.append(case.get("score_reason"))
+                if case.get("judge_passed") is False:
+                    reasons.append(case.get("judge_reason"))
+                if case.get("reliability_passed") is False:
+                    reasons.append("Required tool-call checks failed.")
+                lines.extend(str(reason) for reason in reasons if reason)
         return StepOutput(content="\n".join(lines), success=code == 0 and summary["status"] == "PASS")
 
 
