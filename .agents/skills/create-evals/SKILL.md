@@ -21,10 +21,11 @@ The user's choice, or the least-covered component — almost always one of their
 
 Read the file (or the published config: `eval_db.get_config(component_id="<id>")["config"]`). Every "always", "never", "use X for Y" is a case. Note the tools for reliability assertions.
 
-Two checks decide the hooks:
-
-- **Can the run reach the ungated create/edit/publish Studio tools?** `StudioTools` directly or through a team member — `os-manager-internal` always, and an `agno` case one delegation from a build. Those take `**BUILDER_HOOKS`.
-- **Does it carry learning stores (`learning=`) or the `shared_notes` toolkit?** Those take `**LEARNING_HOOKS`. Builder hooks are a strict superset; when in doubt, take them.
+Run every case through `python -m evals`; the worker requires an owned disposable
+schema. Define fixtures in that database, including published configs needed by
+Studio-built agents; never load or mutate an operator's live components as fixtures.
+Use `Behavior` from `evals/scorers.py` for read-only state/attempt checks, or a scorer
+that verifies the requested stored mutation. No snapshot/diff deletion hooks remain.
 
 ## 3. Mine the platform
 
@@ -55,13 +56,19 @@ Case(
     timeout_seconds=90,
     criteria="<specific, falsifiable>",
     expected_tool_calls=("<tool>",),
-    **BUILDER_HOOKS,   # or **LEARNING_HOOKS — see Step 2; from evals/hooks.py
+    scorer=<behavioral_scorer>,
+    setup=<behavioral_scorer>.setup,
 )
 ```
 
-Pair the judge with `expected_tool_calls` whenever a tool is involved. Ask of every rubric: **could a stock model with no tools and none of these instructions pass it?** If yes, it tests nothing. Env-dependent tool names mirror the file's `_WEB_TOOL` conditional.
+Pair the judge with a deterministic scorer whenever tools are involved. Require
+successful payloads with the right arguments and expected stored state. Tool names
+alone can pass on failed calls, drafts, index-only reads or unrelated resources.
+For read-only/refusal cases, reject mutation attempts and compare durable state.
+Ask of every rubric: could prose alone pass? If so, add an observable assertion.
 
-Fixtures must be names no real team would have on file (`Wilhelmina Ashgrove-Petrov`, `Quillhawk-Meridian`): the hooks delete rows a case *created* and cannot undo an edit inside an existing row. A tool that mutates external state (messages, files, third-party APIs) needs its own containment or no case.
+Use unique fixture names and isolated users. External mutations (messages, files,
+third-party APIs) require their own containment or must stay outside the suite.
 
 ## 6. Run and audit
 
@@ -69,10 +76,10 @@ Fixtures must be names no real team would have on file (`Wilhelmina Ashgrove-Pet
 python -m evals --name <case>
 ```
 
-Be the only writer — the hooks sweep by snapshot diff, so a teammate's note filed during the run gets deleted. Read both sides of the verdict: the response and tools fired, and `judge_reason` (`--json-output`). Run at least twice (three times for judgment words like "compact"); a flipping verdict means the rubric is undecided. If the agent, not the case, is wrong, say so — that's [`improve-agent`](../improve-agent/SKILL.md).
+Run only through the isolated CLI; never sweep shared data. Read both sides of the verdict: the response and tools fired, and `judge_reason` (`--json-output`). Run at least twice (three times for judgment words like "compact"); a flipping verdict means the rubric is undecided. If the agent, not the case, is wrong, say so — that's [`improve-agent`](../improve-agent/SKILL.md).
 
 Loop to Step 4 or finish.
 
 ## 7. Hand over
 
-New cases by name and tag, `git diff evals/cases.py`, suggested commit `eval(<agent>): …`. `smoke` cases ride the run-evals schedule (ships disabled; enabling is the user's call, with the only-writer condition attached); failures go to [`/eval-and-improve`](../eval-and-improve/SKILL.md).
+New cases by name and tag, `git diff evals/cases.py`, suggested commit `eval(<agent>): …`. `smoke` cases ride the run-evals schedule (ships disabled; enabling is the user's call, with model costs understood); failures go to [`/eval-and-improve`](../eval-and-improve/SKILL.md).

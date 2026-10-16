@@ -35,32 +35,22 @@ Look for recurring shapes, visible fumbles, and out-of-scope asks. A recorded an
 
 **Then derive from `INSTRUCTIONS`:** 2–3 probes per rule plus 1–2 adversarial, usually 8–12 total, across golden path, edge cases (should refuse or ask, not fabricate), tool selection, and adversarial (injection, malformed input). Write a one-line expected behavior per probe. Wanting a behavior the instructions don't promise is a Step 5 edit, not a probe failure.
 
-**Bracket the loop — probes leave durable rows.** Learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores; `os-manager-internal` creates, publishes, and schedules real components. Snapshot before the first probe and sweep after the last; the sweep removes rows the probes *created* and cannot undo an edit inside a row that already existed, so every fixture must be something no real team would have on file, and never run the delete side while someone else is using the platform.
-
-```bash
-source .venv/bin/activate
-# learning component — before:
-python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import snapshot_learning_state; print(json.dumps({k: sorted(v) for k, v in snapshot_learning_state().items()}))" > /tmp/pre-learning.json
-# after:
-python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import delete_new_learning_state; delete_new_learning_state({k: set(v) for k, v in json.load(open('/tmp/pre-learning.json')).items()})"
-# os-manager-internal — the builder pair instead (it also sweeps learning state; refuses past 25 learning rows / 5 schedules — batch long campaigns):
-python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import snapshot_builder_state; p=snapshot_builder_state(); print(json.dumps({'component_ids': sorted(p['component_ids']), 'schedule_ids': sorted(p['schedule_ids']), 'learning_state': {k: sorted(v) for k, v in p['learning_state'].items()}}))" > /tmp/pre-builder.json
-python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import delete_new_builder_state; r=json.load(open('/tmp/pre-builder.json')); delete_new_builder_state({'component_ids': set(r['component_ids']), 'schedule_ids': set(r['schedule_ids']), 'learning_state': {k: set(v) for k, v in r['learning_state'].items()}})"
-```
-
-For `os-manager-internal`, "did it publish?" is part of expected behavior — a draft runs nowhere.
+**Isolate probes.** Add temporary or permanent `Case` entries under `evals/` and
+run them with `python -m evals --name <case> --json-output tmp/probe.json`.
+The CLI creates a separate process and an owned disposable database. Seed any needed
+fixtures there. Never probe a live builder through HTTP and sweep the shared database
+afterward; a concurrent user's writes are not distinguishable from probe data.
+For OS Manager, verify publication through stored versions and current pointers.
 
 ## 3. Run the probes
 
 ```bash
-curl -sS -X POST http://localhost:8000/agents/<slug>/runs \
-  -F "message=<probe text>" -F "user_id=probe-<n>" -F "stream=false" \
-  -o /tmp/probe-<n>.json -w "HTTP %{http_code} in %{time_total}s\n"
-jq -r '.content // .' < /tmp/probe-<n>.json
-docker logs agentos-api --since 30s 2>&1 | grep -E "Running: \w+\(" | head -40
+python -m evals --name <case> --json-output tmp/probe.json -v
 ```
 
-Teams: `/teams/<slug>/runs`. Logs are container-global; filter by a phrase from the probe or its `run_id`. Save every response.
+Inspect the output, tool payloads and deterministic scorer result. Fresh-session
+memory checks must use a fresh session with the same isolated user. External effects
+need contained fixtures; PostgreSQL isolation alone cannot undo external actions.
 
 ## 4. Judge
 

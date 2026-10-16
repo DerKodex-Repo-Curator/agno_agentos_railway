@@ -43,7 +43,8 @@ Company planning to Agno's built-in Product Manager. Talk to it over HTTP at
 The template configures it in `app/main.py`; Agno owns its internal members.
 
 Company is enabled by default. Open **Products** in the AgentOS UI to see **This
-AgentOS**, its release-note and local git Sources, Projects, Tasks, and three Routines:
+AgentOS**, its release-note and local git Sources, Projects and Tasks. Set
+`ENABLE_MAINTENANCE=true` to seed three optional model-backed Routines:
 release intake daily at 09:00 UTC, refresh daily at 10:00 UTC, and summary Mondays at
 11:00 UTC. Intake compares releases with the Agno version read at startup and proposes
 work; proposals still need acceptance. If no newer release applies, a quiet check is
@@ -83,7 +84,8 @@ update its complete metadata and Routine instructions deliberately.
 
 Sandboxes are optional. With no dev opt-in or production runtime ARN the platform
 boots without engineering executors. When configured, `codex-engineer` and
-`claude-engineer` share the OS database and check out `agno-agi/agno` main inside
+`claude-engineer` share the OS database and check out your required `SANDBOX_REPOSITORY`
+(`SANDBOX_BRANCH` defaults to `main`) inside
 `/workspace/repository`. Each session pins its repository; subsequent turns resume it.
 
 For Docker development install `uv`, configure `.env`, then run:
@@ -92,7 +94,7 @@ For Docker development install `uv`, configure `.env`, then run:
 docker compose up -d agentos-db agentos-redis
 ./scripts/build_sandbox_image.sh local
 docker compose stop agentos-api
-SANDBOX_ENABLED=true ./scripts/dev.sh
+SANDBOX_REPOSITORY=https://github.com/your-org/your-repo SANDBOX_ENABLED=true ./scripts/dev.sh
 ```
 
 The API runs on the host because DockerSandbox needs the host Docker daemon.
@@ -115,21 +117,23 @@ and keep one API replica until an object-store checkpoint store is available.
 Do not use ephemeral `/tmp` for production checkpoints. `railway.json` keeps one replica;
 provision and mount the checkpoint volume before enabling the runtime.
 
-For the staging account:
+With your own ECR repository and runtime execution role:
 
 ```sh
-export AWS_PROFILE=agno-staging-agentcore AWS_REGION=us-east-1
-export SANDBOX_IMAGE=175651002206.dkr.ecr.us-east-1.amazonaws.com/agno-agentcore-staging:2dec52a7
+export AWS_PROFILE=your-profile AWS_REGION=us-east-1
+export SANDBOX_IMAGE=YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/your-repo:YOUR_IMMUTABLE_TAG
+export SANDBOX_RUNTIME_NAME=your_deployment
+export SANDBOX_EXECUTION_ROLE=arn:aws:iam::YOUR_ACCOUNT:role/your-runtime-role
 ./scripts/build_sandbox_image.sh push
 ./scripts/create_sandbox_runtime.sh
 # Set the printed ARN as SANDBOX_RUNTIME_ARN on the API deployment.
 ```
 
-The runtime defaults to `agno_company_engineer` and the existing execution role
-`arn:aws:iam::175651002206:role/agno-agentcore-runtime-staging`. Override
-`SANDBOX_RUNTIME_NAME` for another deployment (must start `agno_`) and
-`SANDBOX_EXECUTION_ROLE` for its role. Image push builds linux/arm64; local builds
-use the host architecture. The API Dockerfile remains on Python 3.14; the sandbox
+The scripts use your AWS credential chain; they select no account or role by default.
+Set a unique `SANDBOX_RUNTIME_NAME` for each deployment (letter first, then letters,
+digits or underscores, at most 48 characters) and `SANDBOX_EXECUTION_ROLE` explicitly.
+Image push builds linux/arm64; local builds use the host architecture. The API
+Dockerfile remains on Python 3.14; the sandbox
 image follows the framework cookbook's pinned Python 3.12 base.
 
 Agno and the sandbox currently pin main commit `2dec52a7e7bf202c3913b1d442220227525ce73a`.
@@ -167,9 +171,12 @@ Confirm your AgentOS is running at [http://localhost:8000/docs](http://localhost
 
 ### Step 3: Build your first agent using natural language
 
-1. Click **Chat** under the **OS Manager** team and tell it what you're working on: "Help me build an agent for my product".
-2. Give it the docs URL for your product, or for a product you like — `docs.agno.com`, say.
-3. Click the **Refresh** button on the top right. You should now see your new agent in the **Agents** dropdown. Chat with it directly, or just ask Agno to run it for you.
+1. Click **Chat** under the **OS Manager** team and give it a concrete job: "Create and publish an agent that summarizes pasted text. Use the default model and no tools."
+2. After it confirms publication, click **Refresh**. Select the new agent in the **Agents** dropdown and chat with it.
+
+For a product agent grounded in your documentation, use the coding-agent `/create-agent`
+skill. It handles ingestion into `product-knowledge` and registers the agent. OS Manager
+reads Company Sources through the framework; it does not ingest pages into knowledge.
 
 ## Make the platform yours
 
@@ -317,7 +324,16 @@ Improve your agents by running the following skills:
 
 ### Evaluate
 
-Run the eval suite to check for regressions. The evals live in [`evals/cases.py`](evals/cases.py), and run history shows up in the AgentOS UI next to your sessions and traces.
+Run the eval suite to check for regressions. The evals live in [`evals/cases.py`](evals/cases.py), and each suite runs in a separate process with a disposable PostgreSQL database.
+The parent removes only its owned database after the worker exits, including on errors
+and timeouts. Existing sessions, Company data, notes and knowledge are never swept.
+The DB role needs CREATEDB privileges. CLI results are ephemeral: save them with
+`--json-output tmp/evals.json` also saves tool traces in `tmp/evals.evidence.jsonl`;
+scheduled workflow summaries remain in workflow history.
+The worker reads a sanitized source copy without `.env`, eval answers or local logs;
+sandbox execution, Redis, Slack and media tools are disabled. External read/model calls
+still occur and cost money. Do not add externally mutating tools to eval cases without
+an isolated test account or a contained fixture.
 
 The evals run on the host machine, so set up the venv with `./scripts/venv_setup.sh && source .venv/bin/activate`, then run:
 
@@ -347,11 +363,13 @@ Because the repo is managed by coding agents, it moves fast. Run `/review-and-im
 | `AGENTOS_MCP_SIGNING_KEY` | no | none | Optional high-entropy signing-key material (≥32 chars) for OAuth tokens. Unset, a strong key is generated and persisted in the database. Rotating it invalidates outstanding tokens. |
 | `ENABLE_DEPLOY_CHECK` | no | `True` | The reference deployment-check cron runs daily by default. This env var owns the schedule's toggle (re-asserted on every boot); the workflow is runnable on demand regardless. |
 | `EVALS_TAG` | no | `smoke` | Eval tag run by the run-evals workflow. |
-| `EVALS_CASE_TIMEOUT_SECONDS` | no | `90` | Default per-case timeout for run-evals runs; applies only to cases that don't set their own `timeout_seconds`. |
-| `EVALS_SUITE_TIMEOUT_SECONDS` | no | derived | Whole-suite timeout for run-evals runs; per-case timeouts are the granular limit. Unset, it is derived from the cases the tag selects. Set it to override. |
+| `EVALS_SUITE_TIMEOUT_SECONDS` | no | `3600` | Whole-suite timeout for the scheduled eval workflow. Per-case timeouts remain defined in each Case. |
 | `PARALLEL_API_KEY` | no | none | Authenticates Agno's and the Studio registry's web search tools (Parallel SDK when set; keyless MCP fallback). Also the fast route for ingesting a product's docs — clean markdown per page, JS-rendered pages and PDFs included; without it ingestion still works, page by page, just slower. |
-| `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` | no | none | Both must be set to enable the Slack interface. The bot token also lights up the registry's send-only Slack toolkit for built agents. |
+| `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` | no | none | Both must be set to enable the Slack interface. Registry sending additionally requires `ENABLE_SLACK_TOOLS=true`. |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASS` / `DB_DATABASE` | no | matches compose | Postgres connection. |
+| `ENABLE_MAINTENANCE` | no | `false` | Seed the three Company maintenance Routines. Existing saved Routines remain operator-managed; unsetting this does not delete them. |
+| `ENABLE_SLACK_TOOLS` | no | `false` | Add send-only Slack tools to Studio when a bot token is set. Independent of the Slack interface. |
+| `ENABLE_MEDIA_TOOLS` | no | `false` | Add image generation and speech tools using the OpenAI key. |
 | `DB_DRIVER` | no | `postgresql+psycopg` | SQLAlchemy driver. |
 | `AGNO_DEBUG` | no | `False` | If `True`, Agno emits verbose debug logs. Compose sets this for dev. |
 | `WAIT_FOR_DB` | no | `False` | If `True`, the entrypoint blocks on the DB before starting. Compose sets this. |

@@ -1,51 +1,25 @@
-"""
-Run Evals
-=========
+"""python -m evals [--tag smoke|release|live] [--name CASE] [--json-output FILE]."""
 
-python -m evals                         # run all cases (concise UI)
-python -m evals --tag smoke             # run a tagged subset
-python -m evals --name <case>           # run one case
-python -m evals --tag smoke --list      # show what a tag selects, spending nothing
-python -m evals --timeout 180           # per-case clock for cases that set none (120s)
-python -m evals --json-output out.json  # write machine-readable results
-python -m evals -v                      # stream the agent's run with full panels
-
-Agno's eval runner runs each case and evaluates the response with `AgentAsJudgeEval`
-(when `criteria` is set) and/or `ReliabilityEval` (when `expected_tool_calls` is set).
-
-Exit code 0 means every selected case passed, 1 means one failed (or a `--json-output`
-write did), and 2 means the selector matched nothing — so a mistyped `--tag` fails a CI
-gate rather than greening it on an empty run.
-
-Both log to Postgres through `eval_db`. Connect your AgentOS at os.agno.com to see history.
-"""
-
-# Hydrate os.environ from .env before any module that reads env at import time
-# (db_url, model factories, etc.). Pre-existing shell vars take precedence.
-from os import environ
+import asyncio
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-# Standalone evals assemble the manager but serve no HTTP listener. Keep the
-# documented local command usable without a production JWT verification key.
+from evals.isolation import ROOT, run_isolated
+
+
+def main() -> int:
+    load_dotenv(ROOT / ".env")
+    arguments = sys.argv[1:]
+    # The worker reads sources from a temporary directory; output belongs to the caller.
+    for i, argument in enumerate(arguments):
+        if argument == "--json-output" and i + 1 < len(arguments):
+            arguments[i + 1] = str(Path(arguments[i + 1]).resolve())
+        elif argument.startswith("--json-output="):
+            arguments[i] = "--json-output=" + str(Path(argument.split("=", 1)[1]).resolve())
+    return asyncio.run(run_isolated(arguments))[0]
+
+
 if __name__ == "__main__":
-    environ.setdefault("RUNTIME_ENV", "dev")
-
-import sys  # noqa: E402
-
-from agno.eval import cli  # noqa: E402
-from agno.os.utils import collect_mcp_tools_from_registry  # noqa: E402
-
-from app.registry import registry  # noqa: E402
-from evals.cases import CASES, eval_db  # noqa: E402
-
-# Behind the guard so an import never costs money
-if __name__ == "__main__":
-    # AgentOS connects to the registry's MCP toolkits in its server lifecycle.
-    # This standalone process does not have an equivalent, so hand them to the runner instead.
-    # The runner connects them before the cases run and closes them afterwards.
-    mcp_tools: list = []
-    collect_mcp_tools_from_registry(registry, mcp_tools)
-    sys.exit(cli(CASES, db=eval_db, mcp_tools=mcp_tools))
+    sys.exit(main())

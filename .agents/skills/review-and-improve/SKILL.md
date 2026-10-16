@@ -53,7 +53,7 @@ curl -s http://localhost:8000/teams  | jq -r '.[] | select(.is_component == fals
 
 A mismatch with `app/main.py` means another checkout owns port 8000 — stop and say so.
 
-Smoke every code agent and the team with one quick prompt each (`/agents/<slug>/runs`, `/teams/os-manager-internal/runs`; `user_id=claude-review`, `stream=false`). Pass = 200, non-empty content, no errors in `docker logs agentos-api --since 30s`. Bracket the whole step with the learning snapshot pair, and `os-manager-internal`'s run with the builder pair ([improve-agent Step 2](../improve-agent/SKILL.md)); use only the builder's first quick prompt (the others build real components). Workflows stay out — `deployment-check` runs on its cron, `run-evals` spends model budget.
+Smoke every code agent and the team with an isolated Case and observable behavioral assertions. Separately verify HTTP route availability without triggering mutating probes. For model probes, add isolated eval Cases and use `python -m evals --name <case>` ([improve-agent Step 2](../improve-agent/SKILL.md)). Never sweep shared data after live probes. Workflows stay out — `deployment-check` runs on its cron, `run-evals` spends model budget.
 
 Then `./scripts/mcp_check.sh` → `MCP OK — <n> tools` and a real answer.
 

@@ -103,7 +103,7 @@ docker logs agentos-api --since 30s 2>&1 | grep -E "Running: \w+\(" | head -40  
 
 A registry change gets one check first — ask `os-manager-internal`: *"Call list_tools and show the row for <tool> exactly as returned — name, buildable, source. Do not create anything."* `buildable: true`, `source: declared` means it landed; `discovered` means it came from boot discovery and a build will refuse it.
 
-**Side effects.** `os-manager-internal` creates and publishes real components on "build me…" prompts, and learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores. Prefer plan-only probes, use fixture content no real team would have, and bracket the session with the snapshot pairs in [improve-agent Step 2](../improve-agent/SKILL.md). Never run the delete side while someone else is talking to Agno.
+**Side effects.** `os-manager-internal` creates and publishes real components on "build me…" prompts, and learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores. Use isolated Cases through `python -m evals` as described in [improve-agent Step 2](../improve-agent/SKILL.md). Never sweep shared data after live probes. Verify HTTP availability separately from model behavior.
 
 Did the change land? Yes → Step 7. Almost → one more pass, at most 2–3, then ask how to proceed. Worse → show `git diff` and offer to revert only your patch.
 

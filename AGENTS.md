@@ -12,7 +12,7 @@ members in this template. Its `root="."` is this application's read-only source.
   durable queue, MCP `agno` tool, conditional Slack and MCP OAuth.
 - `app/config.yaml`: component descriptions and quick prompts; additional
   declarative `company.products` may also be configured here.
-- `app/company.py`: This AgentOS Product, release Sources, three Routines, and
+- `app/company.py`: This AgentOS Product, release Sources, three opt-in Routines, and
   the `company-analyst` application agent holding CompanyTools.
 - `app/registry.py`: reviewed Studio palette. New runtime capabilities enter here.
 - `app/knowledge.py`: operator `shared-knowledge` and product `product-knowledge`.
@@ -26,7 +26,7 @@ members in this template. Its `root="."` is this application's read-only source.
 - `db/`: cached synchronous PostgresDb and pgvector knowledge helpers. OS, Company,
   queue and executors MUST use the same `get_postgres_db()` instance. Knowledge
   content adapters have distinct IDs. Do not introduce a second adapter with the OS ID.
-- `evals/`: cases, snapshot/cleanup hooks, and Agno eval runner entrypoint.
+- `evals/`: cases, behavioral scorers, owned-database isolation, and Agno eval runner entrypoint.
 - `workflows/`: deterministic deployment check and opt-in model-backed run-evals.
 - `sandbox/`: engineering image and a build helper with a minimal build context.
 - `scripts/`: setup, validation, host development, sandbox build/runtime and Railway deploy.
@@ -45,7 +45,7 @@ docker compose up -d agentos-db agentos-redis
 ./scripts/build_sandbox_image.sh local
 # Stop this checkout's API container before serving the same port on the host.
 docker compose stop agentos-api
-SANDBOX_ENABLED=true ./scripts/dev.sh
+SANDBOX_REPOSITORY=https://github.com/your-org/your-repo SANDBOX_ENABLED=true ./scripts/dev.sh
 ```
 
 Dev disables JWT; production defaults to `prd` and requires JWT verification.
@@ -78,9 +78,11 @@ of a sandboxed Task executor while waiting for the Company executor integration.
 
 ## Evals and verification
 
-Manager cases can delegate to Studio, so use `BUILDER_HOOKS`; other learning agents
-use `LEARNING_HOOKS`. Run probes only as the sole writer: cleanup removes new rows
-and cannot undo edits to existing rows. Preserve the cleanup refusal guards.
+Run cases only through `python -m evals`, which creates an owned disposable database
+and a separate worker process. Never run shared-database snapshot/diff deletion.
+Use deterministic scorers for tool results and persisted state; read-only cases
+assert no business-state changes or mutation attempts. Preserve the database ownership
+guards and keep external side effects contained.
 Use `python -m evals --tag smoke` or `--tag release`; both spend model calls.
 Deployment-check is deterministic. Record integration commands and responses in
 `tmp/VERIFY.md`; distinguish actual model/container runs from static checks.
