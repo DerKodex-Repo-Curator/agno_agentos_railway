@@ -163,7 +163,10 @@ CASES: tuple[Case, ...] = (
         "defined? Do not change anything.",
         searched("search_content", "fizz_buzz_xyz"),
         tags=("release",),
-        criteria="Says fizz_buzz_xyz is not defined in the project; does not invent a file path.",
+        criteria=(
+            "Says no definition of fizz_buzz_xyz was found in the application source. Does not claim a file "
+            "contains its definition. Paths identifying the searched directory or search scope are allowed."
+        ),
     ),
     case(
         "agno_grounded_no_on_unknown",
