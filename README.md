@@ -5,7 +5,7 @@ AgentOS is a durable agent runtime that serves agents over API, MCP, and chat in
 **Three ways to build agents.**
 
 1. **Coding agent.** Point a coding agent at the skills in [`.agents/skills/`](.agents/skills/) and it can create, improve and evaluate your agents for you.
-2. **Natural language.** Ask the built-in Platform Builder to build agents for you.
+2. **Natural language.** Ask the built-in OS Manager to build agents for you.
 3. **No-code Studio.** Build agents visually using the [AgentOS Studio](https://os.agno.com?utm_source=github&utm_medium=template&utm_campaign=agentos-railway).
 
 **Three ways to serve your agents to your users.**
@@ -34,6 +34,109 @@ Clone https://github.com/agno-agi/agentos-railway into a folder called agent-pla
 
 Your coding agent checks Docker, sets up `.env`, boots the platform, verifies the MCP endpoint, connects to the AgentOS UI, then builds your first agent. Prefer to drive yourself? See [Manual Setup](#manual-setup).
 
+## OS Manager and Company
+
+OS Manager (`os-manager-internal`) is the built-in platform agent, served as a team.
+It builds components, reads this application's source, checks operations, and delegates
+Company planning to Agno's built-in Product Manager. Talk to it over HTTP at
+`/teams/os-manager-internal/runs`, through the MCP `agno` tool, or on Slack.
+The template configures it in `app/main.py`; Agno owns its internal members.
+
+Company is enabled by default. Open **Products** in the AgentOS UI to see **This
+AgentOS**, its release-note and local git Sources, Projects, Tasks, and three Routines:
+release intake daily at 09:00 UTC, refresh daily at 10:00 UTC, and summary Mondays at
+11:00 UTC. Intake compares releases with the Agno version read at startup and proposes
+work; proposals still need acceptance. If no newer release applies, a quiet check is
+correct and no Task should be fabricated.
+
+Add another `Product(...)` to `products` in `app/company.py`, or use the same declaration
+under `company.products` in `app/config.yaml`, for example:
+
+```yaml
+company:
+  products:
+    - id: customer-docs
+      name: Customer Docs
+      purpose: Keep our product documentation current
+      metadata: {}
+      sources:
+        - type: website
+          reference: https://docs.example.com
+      routines:
+        - name: Daily refresh
+          template: refresh
+          executor_type: agent
+          executor_id: company-analyst
+          cron_expr: "0 10 * * *"
+          timezone: UTC
+```
+
+Declare all Product metadata together. A later PATCH replaces the entire metadata
+dictionary. For weekly Slack delivery set `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`,
+and `SLACK_SUMMARY_CHANNEL` to the channel ID; the declaration sets
+`metadata.summary = {interface: slack, destination: <channel ID>}`. Without all three,
+the weekly Routine writes a summary to the Product status page. Changing an existing
+Product's declaration does not replace human edits; inspect the saved Product and
+update its complete metadata and Routine instructions deliberately.
+
+## Engineering sandboxes
+
+Sandboxes are optional. With no dev opt-in or production runtime ARN the platform
+boots without engineering executors. When configured, `codex-engineer` and
+`claude-engineer` share the OS database and check out `agno-agi/agno` main inside
+`/workspace/repository`. Each session pins its repository; subsequent turns resume it.
+
+For Docker development install `uv`, configure `.env`, then run:
+
+```sh
+docker compose up -d agentos-db agentos-redis
+./scripts/build_sandbox_image.sh local
+docker compose stop agentos-api
+SANDBOX_ENABLED=true ./scripts/dev.sh
+```
+
+The API runs on the host because DockerSandbox needs the host Docker daemon.
+`SANDBOX_IMAGE` defaults to `agno-sandbox:local`, and `SANDBOX_CHECKPOINTS` defaults
+to `./tmp/checkpoints`. `scripts/dev.sh` loads `.env`, exports the local database and
+Redis connection settings, and starts uvicorn with reload. Redis defaults to host
+port 6380 (`REDIS_PORT`); durable jobs are stored in Postgres. The containerized API
+remains available for development without local sandboxes.
+
+Codex uses `OPENAI_API_KEY`; local Claude uses `ANTHROPIC_API_KEY`. Production Claude
+uses Bedrock through the runtime execution role. `GITHUB_READ_TOKEN` is optional for
+private repositories and must be read-only, restricted to the intended repository.
+`GITHUB_TOKEN` is reserved for future host-side PR publication; it is never forwarded
+to a sandbox. This template does not publish PRs automatically.
+
+Production uses AgentCore when `RUNTIME_ENV=prd` and `SANDBOX_RUNTIME_ARN` is set.
+Use **one runtime per deployment**. Configure AWS credentials or `AWS_PROFILE` on the
+API host, plus `AWS_REGION`. Set `SANDBOX_CHECKPOINTS` to a **persistent mounted volume**
+and keep one API replica until an object-store checkpoint store is available.
+Do not use ephemeral `/tmp` for production checkpoints. `railway.json` keeps one replica;
+provision and mount the checkpoint volume before enabling the runtime.
+
+For the staging account:
+
+```sh
+export AWS_PROFILE=agno-staging-agentcore AWS_REGION=us-east-1
+export SANDBOX_IMAGE=175651002206.dkr.ecr.us-east-1.amazonaws.com/agno-agentcore-staging:2dec52a7
+./scripts/build_sandbox_image.sh push
+./scripts/create_sandbox_runtime.sh
+# Set the printed ARN as SANDBOX_RUNTIME_ARN on the API deployment.
+```
+
+The runtime defaults to `agno_company_engineer` and the existing execution role
+`arn:aws:iam::175651002206:role/agno-agentcore-runtime-staging`. Override
+`SANDBOX_RUNTIME_NAME` for another deployment (must start `agno_`) and
+`SANDBOX_EXECUTION_ROLE` for its role. Image push builds linux/arm64; local builds
+use the host architecture. The API Dockerfile remains on Python 3.14; the sandbox
+image follows the framework cookbook's pinned Python 3.12 base.
+
+Agno and the sandbox currently pin main commit `2dec52a7e7bf202c3913b1d442220227525ce73a`.
+Move both pins to a release when available. Direct executor runs are separate from
+Company accepting and dispatching sandboxed Tasks; that integration awaits Company
+PR 7.2. Do not treat a passing direct run as proof of the Company engineering loop.
+
 ## Manual Setup
 
 ### Step 1: Run locally
@@ -61,7 +164,7 @@ Confirm your AgentOS is running at [http://localhost:8000/docs](http://localhost
 
 ### Step 3: Build your first agent using natural language
 
-1. Click **Chat** under the **Agno** team and tell it what you're working on: "Help me build an agent for my product".
+1. Click **Chat** under the **OS Manager** team and tell it what you're working on: "Help me build an agent for my product".
 2. Give it the docs URL for your product, or for a product you like — `docs.agno.com`, say.
 3. Click the **Refresh** button on the top right. You should now see your new agent in the **Agents** dropdown. Chat with it directly, or just ask Agno to run it for you.
 

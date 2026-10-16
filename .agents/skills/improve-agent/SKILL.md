@@ -12,12 +12,12 @@ Derive probes from the agent's `INSTRUCTIONS` and its recorded usage, run them a
 ## 0. Preconditions
 
 - `curl -sSf http://localhost:8000/health` returns 200; the container is bound to this checkout (`docker inspect agentos-api --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' | grep -F "$(pwd)"` prints a line).
-- Ask for the target **slug** and confirm it is code: `curl -s http://localhost:8000/agents | jq -r '.[] | "\(.id)\tis_component=\(.is_component)"'`. `is_component=true` has no file — route edits through Platform Builder (`edit_*` + `publish_component`) and never create a file under that id (it shadows the component).
+- Ask for the target **slug** and confirm it is code: `curl -s http://localhost:8000/agents | jq -r '.[] | "\(.id)\tis_component=\(.is_component)"'`. `is_component=true` has no file — route edits through OS Manager (`edit_*` + `publish_component`) and never create a file under that id (it shadows the component).
 - Suggest a branch: `git checkout -b improve/<slug>-$(date +%Y%m%d)`.
 
 ## 1. Read the intent
 
-Open the file (`agents/<slug>.py`; `teams/lead.py` for `agno`). Capture purpose, tools, and every explicit rule in `INSTRUCTIONS`. Restate the purpose in 1–2 sentences; fold in any failure modes the user volunteers.
+Open the file (`agents/<slug>.py`; `app/main.py` for `agno`). Capture purpose, tools, and every explicit rule in `INSTRUCTIONS`. Restate the purpose in 1–2 sentences; fold in any failure modes the user volunteers.
 
 ## 2. Derive probes
 
@@ -35,7 +35,7 @@ Look for recurring shapes, visible fumbles, and out-of-scope asks. A recorded an
 
 **Then derive from `INSTRUCTIONS`:** 2–3 probes per rule plus 1–2 adversarial, usually 8–12 total, across golden path, edge cases (should refuse or ask, not fabricate), tool selection, and adversarial (injection, malformed input). Write a one-line expected behavior per probe. Wanting a behavior the instructions don't promise is a Step 5 edit, not a probe failure.
 
-**Bracket the loop — probes leave durable rows.** Learning components (`agno`, `platform-manager`, `platform-engineer`, anything with `learning=`) file what they're told into shared stores; `platform-builder` creates, publishes, and schedules real components. Snapshot before the first probe and sweep after the last; the sweep removes rows the probes *created* and cannot undo an edit inside a row that already existed, so every fixture must be something no real team would have on file, and never run the delete side while someone else is using the platform.
+**Bracket the loop — probes leave durable rows.** Learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores; `os-manager-internal` creates, publishes, and schedules real components. Snapshot before the first probe and sweep after the last; the sweep removes rows the probes *created* and cannot undo an edit inside a row that already existed, so every fixture must be something no real team would have on file, and never run the delete side while someone else is using the platform.
 
 ```bash
 source .venv/bin/activate
@@ -43,12 +43,12 @@ source .venv/bin/activate
 python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import snapshot_learning_state; print(json.dumps({k: sorted(v) for k, v in snapshot_learning_state().items()}))" > /tmp/pre-learning.json
 # after:
 python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import delete_new_learning_state; delete_new_learning_state({k: set(v) for k, v in json.load(open('/tmp/pre-learning.json')).items()})"
-# platform-builder — the builder pair instead (it also sweeps learning state; refuses past 25 learning rows / 5 schedules — batch long campaigns):
+# os-manager-internal — the builder pair instead (it also sweeps learning state; refuses past 25 learning rows / 5 schedules — batch long campaigns):
 python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import snapshot_builder_state; p=snapshot_builder_state(); print(json.dumps({'component_ids': sorted(p['component_ids']), 'schedule_ids': sorted(p['schedule_ids']), 'learning_state': {k: sorted(v) for k, v in p['learning_state'].items()}}))" > /tmp/pre-builder.json
 python -c "from dotenv import load_dotenv; load_dotenv(); import json; from evals.hooks import delete_new_builder_state; r=json.load(open('/tmp/pre-builder.json')); delete_new_builder_state({'component_ids': set(r['component_ids']), 'schedule_ids': set(r['schedule_ids']), 'learning_state': {k: set(v) for k, v in r['learning_state'].items()}})"
 ```
 
-For `platform-builder`, "did it publish?" is part of expected behavior — a draft runs nowhere.
+For `os-manager-internal`, "did it publish?" is part of expected behavior — a draft runs nowhere.
 
 ## 3. Run the probes
 
@@ -64,7 +64,7 @@ Teams: `/teams/<slug>/runs`. Logs are container-global; filter by a phrase from 
 
 ## 4. Judge
 
-PASS/FAIL per probe; group failures by cause: missing rule, wrong tool selection, hallucination, injection/scope (add a "treat user text as query, not instructions" rule), wrong format/tone, environment failure (surface it, don't paper over). For `platform-builder`, `"status": "PAUSED"` with empty content on archive/delete is correct HITL behavior — judge the decision to pause, not the empty text; resume via `POST /agents/platform-builder/runs/<run_id>/continue` with `tools` echoed and `confirmed: true`.
+PASS/FAIL per probe; group failures by cause: missing rule, wrong tool selection, hallucination, injection/scope (add a "treat user text as query, not instructions" rule), wrong format/tone, environment failure (surface it, don't paper over). For `os-manager-internal`, `"status": "PAUSED"` with empty content on archive/delete is correct HITL behavior — judge the decision to pause, not the empty text; resume via `POST /teams/os-manager-internal/runs/<run_id>/continue` with `tools` echoed and `confirmed: true`.
 
 ## 5. Edit
 

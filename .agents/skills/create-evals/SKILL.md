@@ -23,7 +23,7 @@ Read the file (or the published config: `eval_db.get_config(component_id="<id>")
 
 Two checks decide the hooks:
 
-- **Can the run reach the ungated create/edit/publish Studio tools?** `StudioTools` directly or through a team member — `platform-builder` always, and an `agno` case one delegation from a build. Those take `**BUILDER_HOOKS`.
+- **Can the run reach the ungated create/edit/publish Studio tools?** `StudioTools` directly or through a team member — `os-manager-internal` always, and an `agno` case one delegation from a build. Those take `**BUILDER_HOOKS`.
 - **Does it carry learning stores (`learning=`) or the `shared_notes` toolkit?** Those take `**LEARNING_HOOKS`. Builder hooks are a strict superset; when in doubt, take them.
 
 ## 3. Mine the platform

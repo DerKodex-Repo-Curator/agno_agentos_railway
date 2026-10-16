@@ -8,6 +8,10 @@ description: Add a new agent to this AgentOS. Runs guided discovery or takes a c
 > _Coding-agent workflow: run as `/create-agent` or by describing the task._
 
 The platform is on `http://localhost:8000` (`RUNTIME_ENV=dev`); code edits hot-reload.
+When started with `scripts/dev.sh`, run Python via `.venv/bin/python` with `.env`
+loaded instead of `docker exec`/`docker compose exec`; inspect the host API log.
+Keep the host process running for sandbox development and restart it after env or
+manifest changes. For MCP checks use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh`.
 
 ## 0. Preconditions
 
@@ -17,7 +21,7 @@ The platform is on `http://localhost:8000` (`RUNTIME_ENV=dev`); code edits hot-r
 
 **Be self-driving: ask only what needs a human, decide the rest, say what you decided.** Two exchanges is the target. Use the harness's structured choice control for choice-shaped questions, plain prompts for free-form ones.
 
-This skill builds lane 1 — a source file in `agents/`, governed by git. Lane 2 is a component Platform Builder composes at runtime; it can't touch the repo, so anything needing a code change (a toolkit the registry lacks, custom Python, a dependency, growing [`app/registry.py`](../../../app/registry.py)) is yours.
+This skill builds lane 1 — a source file in `agents/`, governed by git. Lane 2 is a component OS Manager composes at runtime; it can't touch the repo, so anything needing a code change (a toolkit the registry lacks, custom Python, a dependency, growing [`app/registry.py`](../../../app/registry.py)) is yours.
 
 **Check the id is free first** — both lanes share one id space and code silently wins, hiding a Studio-built component under your file:
 
@@ -37,7 +41,7 @@ Decide these yourself:
 
 | Decision | How |
 |---|---|
-| **Pattern** | **Product agent** when the ask names a product. **Direct tools** ([`agents/manager.py`](../../../agents/manager.py)) for ≤2 toolkits — the common case. **Context provider** ([`agents/engineer.py`](../../../agents/engineer.py)) when it queries one information source. |
+| **Pattern** | **Product agent** when the ask names a product. **Direct tools** ([`app/company.py`](../../../app/company.py)) for ≤2 toolkits — the common case. **Context provider** (`agno.context.workspace.WorkspaceContextProvider`) when it queries one information source. |
 | **Slug** | From the purpose, kebab-case (`pr-reviewer`). |
 | **Model** | `default_model()`. Override only if asked. |
 | **Toolkits** | From the discovery answers, grounded in docs. Prefer what's in the image and keyless: the Parallel MCP for anything web-facing, `HackerNewsTools`, `CalculatorTools`, `get_shared_notes_tools()` for files and state. |
@@ -109,14 +113,14 @@ How you <work>:
 )
 ```
 
-- No `offload_tool_results` — that's for the four platform agents only.
+- No `offload_tool_results` — that's for the OS Manager and its internal members only.
 - Drop `learning=`/`user_id` only for a stated reason, in a comment. Platform-owned state goes in the shared notebook: `tools=[*get_shared_notes_tools(), ...]` ([`app/notes.py`](../../../app/notes.py)), working files under `<slug>/`.
 - Context provider: spread `provider.get_tools()` into `tools=` and append `provider.instructions()` to the instructions.
-- **Every line ≤120 characters, `INSTRUCTIONS` included** — the repo lints `E501` and ruff won't reflow string literals. Wrap long bullets with a two-space hanging indent like [`agents/manager.py`](../../../agents/manager.py).
+- **Every line ≤120 characters, `INSTRUCTIONS` included** — the repo lints `E501` and ruff won't reflow string literals. Wrap long bullets with a two-space hanging indent like [`app/company.py`](../../../app/company.py).
 
 ### The product agent
 
-Answers questions about one product from that product's docs, and nothing else. The recommended first agent (setup-platform hands off here). Two trust rules: **knowledge search is its only tool** (no web tools, no notes — it can answer badly but must not act badly; `learning=shared_learning` stays, so it knows each person across sessions), and **it reads `product-knowledge`, never `shared-knowledge`** (both in [`app/knowledge.py`](../../../app/knowledge.py) — operator content stays out of an end-user agent's retrieval). Platform Builder builds the same agent at runtime from the same pieces; this is the code-level twin.
+Answers questions about one product from that product's docs, and nothing else. The recommended first agent (setup-platform hands off here). Two trust rules: **knowledge search is its only tool** (no web tools, no notes — it can answer badly but must not act badly; `learning=shared_learning` stays, so it knows each person across sessions), and **it reads `product-knowledge`, never `shared-knowledge`** (both in [`app/knowledge.py`](../../../app/knowledge.py) — operator content stays out of an end-user agent's retrieval). OS Manager builds the same agent at runtime from the same pieces; this is the code-level twin.
 
 Decide and state: slug from the product; root URL (prefer the docs subdomain); page cap **50** — the sitemap in order up to the cap, never a keyword slice (a skipped page turns a true answer into "not documented"). Cost, said once: embeddings under a cent for 50 pages; Parallel spends about one credit per 8 pages.
 
@@ -139,14 +143,14 @@ Step 7: three probes, not one — a covered question (details plus a Source URL)
 
 ## 4. Register in `app/main.py`
 
-Import it and put it **first** in `agents=[…]` — it's what the platform is for; the platform agents come after. That line also puts it on Agno's roster (the team runs every registered agent by name).
+Import it and put it **first** in `agents=[…]` — it's what the platform is for; the analyst and optional engineering executors come after. That line also puts it on Agno's roster (the team runs every registered agent by name).
 
 ```python
 from agents.<slug_underscore> import <slug_underscore>
 
 agent_os = AgentOS(
     ...
-    agents=[<slug_underscore>, platform_builder, platform_manager, platform_engineer],
+    agents=[<slug_underscore>, company_analyst, *engineering_agents()],
 )
 ```
 

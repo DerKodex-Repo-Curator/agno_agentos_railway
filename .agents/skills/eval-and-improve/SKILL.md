@@ -27,7 +27,7 @@ python -m evals --json-output out.json # machine-readable (carries judge_reason)
 python -m evals -v                     # stream the runs
 ```
 
-Exit 0 = all passed. **Be the only writer:** teardowns sweep by snapshot diff, so a note or entity a teammate files during a case gets deleted. Coming from a scheduled failure? Find the case in eval history (`db.get_eval_runs()`, os.agno.com, or Platform Manager) and reproduce it with `--name` first; one that won't reproduce is usually environment. Stderr noise at the end of a run (`Event loop is closed`, httpx timeouts) is harmless.
+Exit 0 = all passed. **Be the only writer:** teardowns sweep by snapshot diff, so a note or entity a teammate files during a case gets deleted. Coming from a scheduled failure? Find the case in eval history (`db.get_eval_runs()`, os.agno.com, or OS Manager) and reproduce it with `--name` first; one that won't reproduce is usually environment. Stderr noise at the end of a run (`Event loop is closed`, httpx timeouts) is harmless.
 
 ## 2. Diagnose
 
@@ -49,7 +49,7 @@ Exit 0 = all passed. **Be the only writer:** teardowns sweep by snapshot diff, s
 
 ## 3. Scope
 
-In: `agents/<slug>.py` / `teams/lead.py` (instructions, tools, model); `evals/cases.py` when an assertion was wrong; a one-line `app/main.py` flip if a case needs it. Out (flag, don't do): removing cases, editing `db/` or `app/` to pass, editing agno. Fast iteration on agent quality is [`improve-agent`](../improve-agent/SKILL.md); a user-driven change is [`extend-agent`](../extend-agent/SKILL.md).
+In: `agents/<slug>.py` / `app/main.py` (instructions, tools, model); `evals/cases.py` when an assertion was wrong; a one-line `app/main.py` flip if a case needs it. Out (flag, don't do): removing cases, editing `db/` or `app/` to pass, editing agno. Fast iteration on agent quality is [`improve-agent`](../improve-agent/SKILL.md); a user-driven change is [`extend-agent`](../extend-agent/SKILL.md).
 
 ## 4. Re-run and stop
 

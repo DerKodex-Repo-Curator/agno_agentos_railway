@@ -36,18 +36,25 @@ Read [`AGENTS.md`](../../../AGENTS.md) end to end.
 
 ## 2. Environment
 
-`cp example.env .env`, then set `OPENAI_API_KEY`:
+If `.env` does not exist, `cp example.env .env`, then set `OPENAI_API_KEY`:
 
 - Already in their shell → say so and copy it across without reading or printing it.
 - Otherwise open `.env` in their editor (`cursor`, `code`) and ask them to paste it. Never open a terminal editor from your shell — it hangs the session.
 
 ## 3. Boot
 
-`docker compose up -d --build`, then poll http://localhost:8000/docs until 200 (first build takes minutes). If it never comes up, read `docker compose logs agentos-api`.
+For standard development, `docker compose up -d --build`, then poll http://localhost:8000/docs until 200 (first build takes minutes). If it never comes up, read `docker compose logs agentos-api`.
+
+For sandbox development, install `uv`, run `docker compose up -d agentos-db agentos-redis`,
+`./scripts/build_sandbox_image.sh local`, stop this checkout's API container if running,
+and run `SANDBOX_ENABLED=true ./scripts/dev.sh` in a persistent terminal. The host API
+uses Docker directly. Check `/health` and `/config`; Company should list its four tables,
+OS Manager, and the optional coding executors. Never start two APIs on the same port.
+For this host path use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh` below.
 
 ## 4. Prove it
 
-`./scripts/mcp_check.sh` prints "MCP OK" and a real agent answer. Quote the answer — it's their Platform Manager — and say the MCP server is live.
+`./scripts/mcp_check.sh` prints "MCP OK" and a real agent answer. Quote the answer — it's their OS Manager — and say the MCP server is live.
 
 ## 5. Connect the AgentOS UI
 

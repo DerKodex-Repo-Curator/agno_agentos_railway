@@ -10,6 +10,10 @@ description: User-driven loop to change an existing agent in this AgentOS — ad
 The user names a change; you implement it, verify it against the live agent, and ask if there's more. Stop when they say done. The autonomous half is [`improve-agent`](../improve-agent/SKILL.md) — run it afterward.
 
 The platform is on `http://localhost:8000` (`RUNTIME_ENV=dev`); code edits hot-reload.
+When started with `scripts/dev.sh`, run Python via `.venv/bin/python` with `.env`
+loaded instead of `docker exec`/`docker compose exec`; inspect the host API log.
+Keep the host process running for sandbox development and restart it after env or
+manifest changes. For MCP checks use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh`.
 
 ## 0. Preconditions
 
@@ -25,9 +29,9 @@ Confirm the slug is code, not a Studio-built component:
 curl -s http://localhost:8000/agents | jq -r '.[] | "\(.id)\tis_component=\(.is_component)"'
 ```
 
-`is_component=true` has no source file — route the change through Platform Builder (`edit_agent` / `edit_team` / `edit_workflow`, then `publish_component`). Never create `agents/<slug>.py` under that id: code wins on resolution and silently shadows the built component.
+`is_component=true` has no source file — route the change through OS Manager (`edit_agent` / `edit_team` / `edit_workflow`, then `publish_component`). Never create `agents/<slug>.py` under that id: code wins on resolution and silently shadows the built component.
 
-Open the file — `agents/<slug>.py`, or for the reference components `platform-builder` → [`agents/builder.py`](../../../agents/builder.py), `platform-manager` → [`agents/manager.py`](../../../agents/manager.py), `platform-engineer` → [`agents/engineer.py`](../../../agents/engineer.py), `agno` → [`teams/lead.py`](../../../teams/lead.py). Capture purpose (docstring + `INSTRUCTIONS`), tools, pattern, and the existing levers (`learning=`, `knowledge=`, `num_history_runs`, model). Restate the purpose in 1–2 sentences.
+Open the user's `agents/<slug>.py`. For OS Manager (`os-manager-internal`), inspect its `OSManager(...)` configuration in [`app/main.py`](../../../app/main.py) and the installed framework source; its members are framework-owned. Capture purpose, tools, learning, knowledge and model. Do not recreate the internal agents in this template.
 
 ## 2. Ask what to change
 
@@ -55,7 +59,7 @@ Repo-specific rules per branch:
 
 - **Learning / memory** — the lever is `learning=shared_learning` ([`app/learning.py`](../../../app/learning.py)). `enable_user_memories` is not an `Agent` parameter; `enable_agentic_memory` must stay off beside a LearningMachine. Entities are Agno's — don't index them from a second component. `add_history_to_context` replays the session and persists nothing.
 - **Knowledge** — wire `knowledge=shared_knowledge` ([`app/knowledge.py`](../../../app/knowledge.py)) as one object (a list on an agent searches nothing). A product agent gets its own base — see create-agent's product pattern.
-- **Sub-agent / context provider** — mirror [`agents/engineer.py`](../../../agents/engineer.py): spread `provider.get_tools()` into `tools=`, append `provider.instructions()` to `INSTRUCTIONS`.
+- **Sub-agent / context provider** — use `WorkspaceContextProvider`: spread `provider.get_tools()` into `tools=`, append `provider.instructions()` to `INSTRUCTIONS`.
 - **Scheduled task** — [agno scheduler docs](https://docs.agno.com/agent-os/scheduler); `scheduler=True` is already on in `app/main.py`.
 - **Grow the registry** — the bucket you declare into decides how a built component references it (`tool_names`, `model_id`, `knowledge_name`, `learning_name`, `function_name`). Tool names are global to an agent, so a toolkit exposing a name another declared toolkit already has is silently dropped — check first, and give any new toolkit `add_instructions=True` (a built component's instructions are model-written; this is your only usage channel):
 
@@ -87,7 +91,7 @@ docker exec agentos-api grep -c "<unique substring from your edit>" /app/agents/
 
 ## 6. Smoke test
 
-Pick a prompt that exercises the change (teams: `/teams/agno/runs`, same flags):
+Pick a prompt that exercises the change (teams: `/teams/os-manager-internal/runs`, same flags):
 
 ```bash
 curl -sS -X POST http://localhost:8000/agents/<slug>/runs \
@@ -97,9 +101,9 @@ jq -r '.content // .' < /tmp/extend-out.json
 docker logs agentos-api --since 30s 2>&1 | grep -E "Running: \w+\(" | head -40   # which tools fired
 ```
 
-A registry change gets one check first — ask `platform-builder`: *"Call list_tools and show the row for <tool> exactly as returned — name, buildable, source. Do not create anything."* `buildable: true`, `source: declared` means it landed; `discovered` means it came from boot discovery and a build will refuse it.
+A registry change gets one check first — ask `os-manager-internal`: *"Call list_tools and show the row for <tool> exactly as returned — name, buildable, source. Do not create anything."* `buildable: true`, `source: declared` means it landed; `discovered` means it came from boot discovery and a build will refuse it.
 
-**Side effects.** `platform-builder` creates and publishes real components on "build me…" prompts, and learning components (`agno`, `platform-manager`, `platform-engineer`, anything with `learning=`) file what they're told into shared stores. Prefer plan-only probes, use fixture content no real team would have, and bracket the session with the snapshot pairs in [improve-agent Step 2](../improve-agent/SKILL.md). Never run the delete side while someone else is talking to Agno.
+**Side effects.** `os-manager-internal` creates and publishes real components on "build me…" prompts, and learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores. Prefer plan-only probes, use fixture content no real team would have, and bracket the session with the snapshot pairs in [improve-agent Step 2](../improve-agent/SKILL.md). Never run the delete side while someone else is talking to Agno.
 
 Did the change land? Yes → Step 7. Almost → one more pass, at most 2–3, then ask how to proceed. Worse → show `git diff` and offer to revert only your patch.
 
