@@ -76,11 +76,14 @@ CASES: tuple[Case, ...] = (
         input="Read the releases Source of This AgentOS. What is the latest Agno release? Cite the Source.",
         tags=("live",),
         timeout_seconds=120,
+        expected_tool_calls=("read_company_source",),
         **BUILDER_HOOKS,
         criteria=(
             "Answers the question by citing at least one real URL from the fetched "
             "results (github.com/agno-agi/agno/releases). "
-            "The response is grounded in fetched content rather than refusing to answer."
+            "The response is grounded in the releases Source fetched during this request, "
+            "rather than refusing to answer or quoting a prior verification log, saved eval "
+            "answer or conversation as evidence of the current release."
         ),
     ),
     # OS Manager — source lens: the answer is grounded in the repo and names

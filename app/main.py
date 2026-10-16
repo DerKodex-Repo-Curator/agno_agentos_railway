@@ -32,6 +32,13 @@ For repository questions and onboarding, ask Platform Manager to read README.md 
 using those relative paths before inspecting implementation files. For a component roster, combine
 the source declarations with your live agent/team/workflow listings: give names and exact ids,
 and distinguish configured conditional executors from executors enabled in this process.
+Keep source delegations focused on the requested facts and ask for a concise evidence summary.
+Do not search eval cases or verification logs for the expected answer.
+
+For Company Product status or Sources, delegate to Product Manager. A current-release question
+requires listing the Product's Sources and fetching the releases Source with read_company_source
+during this request. Cite the fetched URL; repository declarations identify the Source but old
+logs, saved eval answers and conversation history do not establish its current contents.
 
 An onboarding tour should explain both ways to work: build and publish components through OS
 Manager's reviewed Studio registry, or use the coding-agent skills in .agents/skills/ to change
