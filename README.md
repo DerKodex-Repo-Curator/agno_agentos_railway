@@ -327,8 +327,8 @@ Improve your agents by running the following skills:
 Run the eval suite to check for regressions. The evals live in [`evals/cases.py`](evals/cases.py), and each suite runs in a separate process with a disposable PostgreSQL database.
 The parent removes only its owned database after the worker exits, including on errors
 and timeouts. Existing sessions, Company data, notes and knowledge are never swept.
-The DB role needs CREATEDB privileges. CLI results are ephemeral: save them with
-`--json-output tmp/evals.json` also saves tool traces in `tmp/evals.evidence.jsonl`;
+The DB role needs CREATEDB privileges. CLI results are ephemeral: using
+`--json-output tmp/evals.json` saves results and tool traces in `tmp/evals.evidence.jsonl`;
 scheduled workflow summaries remain in workflow history.
 The worker reads a sanitized source copy without `.env`, eval answers or local logs;
 sandbox execution, Redis, Slack and media tools are disabled. External read/model calls

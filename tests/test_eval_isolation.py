@@ -118,6 +118,34 @@ assert not any(type(t).__name__ == 'KnowledgeManagementTools' for t in manager_t
         self.assertEqual(code, 2)
         self.assertEqual(self.databases(), before)
 
+    def test_optional_capabilities_require_explicit_flags(self):
+        # CompanyTools initializes tables, so even configuration checks use an owned DB.
+        with isolated_environment() as (env, directory):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    """
+import importlib
+import os
+from app import company
+from app.tools import get_media_tools, get_slack_tools
+os.environ.update(OPENAI_API_KEY='test-key-no-requests', SLACK_BOT_TOKEN='test-token-no-requests')
+for enabled in ('', 'false', 'true'):
+    os.environ.update(ENABLE_MAINTENANCE=enabled, ENABLE_MEDIA_TOOLS=enabled, ENABLE_SLACK_TOOLS=enabled)
+    configured = importlib.reload(company)
+    assert len(configured.products[0].routines) == (3 if enabled == 'true' else 0)
+    assert bool(get_media_tools()) == (enabled == 'true')
+    assert bool(get_slack_tools()) == (enabled == 'true')
+""",
+                ],
+                cwd=directory,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     async def test_readonly_gate_detects_real_company_and_notebook_writes(self):
         from agno.company import CompanyManager
         from agno.db.postgres import PostgresDb
