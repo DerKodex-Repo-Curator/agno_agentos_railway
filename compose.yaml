@@ -14,6 +14,15 @@ services:
     networks:
       - agentos
 
+  agentos-redis:
+    image: redis:7-alpine
+    container_name: agentos-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    networks:
+      - agentos
+
   agentos-api:
     build:
       context: .
@@ -37,6 +46,7 @@ services:
       AGNO_DEBUG: "True"
       WAIT_FOR_DB: "True"
       AGENTOS_URL: http://127.0.0.1:8000
+      REDIS_URL: redis://agentos-redis:6379/0
       DB_HOST: agentos-db
       DB_PORT: 5432
       DB_USER: ${DB_USER:-ai}
@@ -44,6 +54,7 @@ services:
       DB_DATABASE: ${DB_DATABASE:-ai}
     depends_on:
       - agentos-db
+      - agentos-redis
     networks:
       - agentos
     extra_hosts:

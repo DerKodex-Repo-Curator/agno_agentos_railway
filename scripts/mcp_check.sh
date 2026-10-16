@@ -46,16 +46,29 @@ EXPECTED_TOOLS="${MCP_EXPECTED_TOOLS:-9}"
 echo ""
 echo -e "${ORANGE}▸${NC} ${BOLD}MCP Check${NC}"
 echo ""
-echo -e "${DIM}> http://localhost:8000/mcp  (client runs inside agentos-api)${NC}"
+echo -e "${DIM}> http://localhost:8000/mcp  (client: host when MCP_CHECK_HOST=1, otherwise agentos-api)${NC}"
 echo ""
 
-if docker compose exec -T agentos-api python -u - "$QUESTION" "$EXPECTED_TOOLS" <<'PY'
+runner=(docker compose exec -T agentos-api python)
+if [[ "${MCP_CHECK_HOST:-0}" == "1" ]]; then
+    runner=(uv run --no-project --env-file .env --with-requirements requirements.txt python)
+fi
+if "${runner[@]}" -u - "$QUESTION" "$EXPECTED_TOOLS" <<'PY'
 import asyncio
+import os
 import sys
 import time
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from contextlib import asynccontextmanager
+from httpx2 import AsyncClient
+from mcp.client.streamable_http import streamable_http_client
+
+@asynccontextmanager
+async def streamablehttp_client(url, headers=None, timeout=180):
+    async with AsyncClient(headers=headers, timeout=timeout) as client:
+        async with streamable_http_client(url, http_client=client) as streams:
+            yield streams
 
 ORANGE = "\033[38;5;208m"
 RED = "\033[31m"
@@ -75,7 +88,7 @@ def step(text: str) -> None:
 
 
 async def run_check(headers: dict | None, auth_note: str) -> None:
-    async with streamablehttp_client("http://localhost:8000/mcp", headers=headers, timeout=180) as (read, write, _):
+    async with streamablehttp_client(os.getenv("AGENTOS_URL", "http://localhost:8000") + "/mcp", headers=headers, timeout=180) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             step(f"Handshake — {auth_note}")
@@ -90,12 +103,14 @@ async def run_check(headers: dict | None, auth_note: str) -> None:
             step(f"MCP OK — {len(names)} tools")
             start = time.perf_counter()
             result = await session.call_tool(
-                "run_agent",
-                {"agent_id": "platform-manager", "message": sys.argv[1]},
+                "agno",
+                {"message": sys.argv[1]},
                 read_timeout_seconds=None,
             )
+            if result.is_error:
+                raise RuntimeError(str(result.content))
             elapsed = time.perf_counter() - start
-            step(f"run_agent — platform-manager answered in {elapsed:.1f}s")
+            step(f"agno — OS Manager answered in {elapsed:.1f}s")
             # run_agent returns a trimmed ToolResult: content[0].text is the plain
             # answer, and structuredContent carries {run_id, session_id, status}.
             print(flush=True)

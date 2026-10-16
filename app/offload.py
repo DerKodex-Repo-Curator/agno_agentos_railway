@@ -13,7 +13,7 @@ component `search_result` and `read_result` to go back for the parts it needs.
 
 from agno.offload import ResultStore
 
-# Platform agents only. The four reference components do long back-and-forth work
+# Platform agents only. OS Manager and its members do long back-and-forth work
 # over big tool payloads — source files, metrics, registry listings, web pages —
 # and that is what this is for. A new agent does not get it by default; wire it
 # only when an agent's tool results are measured to outgrow its context.

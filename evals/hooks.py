@@ -11,10 +11,9 @@ rather than guess when a snapshot looks incomplete.
 Cases take the ready-made pairs:
 
 - `**BUILDER_HOOKS` — any case whose component can reach the builder's ungated
-  create/edit/publish tools: every `platform-builder` case, and any `agno` case
-  one delegation away from a build. Sweeps components, schedules, and learnings.
+  create/edit/publish tools: every OS Manager case. Sweeps components, schedules, and learnings.
 - `**LEARNING_HOOKS` — every other case probing a learning-store component
-  (`agno`, `platform-manager`, `platform-engineer`). Sweeps entities, memories,
+  (any user agent with `learning=`). Sweeps entities, memories,
   profiles, and notes.
 
 The builder pair is a strict superset, so upgrading a borderline case is safe.
@@ -83,8 +82,7 @@ async def cleanup_new_components(pre_run_ids: set[str], result: CaseResult) -> N
 
 
 def snapshot_learning_state() -> dict[str, set[str]]:
-    """`setup` hook for cases probing a component with learning stores (agno,
-    platform-builder, platform-manager, platform-engineer): the learning ids (entities,
+    """`setup` hook for cases probing a component with learning stores: the learning ids (entities,
     profiles, memories) and note paths present before the case runs, so the teardown
     can delete only what the case created.
 

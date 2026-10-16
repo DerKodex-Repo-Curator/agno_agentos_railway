@@ -7,18 +7,21 @@ from contextlib import asynccontextmanager
 from os import getenv
 from pathlib import Path
 
-from agno.os import AgentOS, MCPConfig
+from agno.job_queue import QueueConfig
+from agno.os import AgentOS, CompanyConfig, MCPConfig, OSManager
 from agno.os.config import AuthorizationConfig
 from agno.utils.log import log_info
 
-from agents.builder import platform_builder
-from agents.engineer import platform_engineer
-from agents.manager import platform_manager
+from agents.engineer_sandbox import engineering_agents
+from app.company import company_analyst, products
 from app.knowledge import product_knowledge, shared_knowledge
+from app.learning import shared_learning
+from app.offload import result_store
 from app.registry import registry
 from app.schedules import register_schedules
+from app.settings import default_model
+from app.tools import get_knowledge_management_tools
 from db import get_postgres_db
-from teams.lead import agno_team
 from workflows.deployment_check import deployment_check
 from workflows.run_evals import run_evals
 
@@ -35,22 +38,6 @@ agentos_url = getenv("AGENTOS_URL", "http://127.0.0.1:8000")
 # ---------------------------------------------------------------------------
 SLACK_BOT_TOKEN = getenv("SLACK_BOT_TOKEN", "")
 SLACK_SIGNING_SECRET = getenv("SLACK_SIGNING_SECRET", "")
-
-interfaces: list = []
-if SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET:
-    from agno.os.interfaces.slack import Slack
-
-    interfaces.append(
-        Slack(
-            team=agno_team,
-            streaming=True,
-            token=SLACK_BOT_TOKEN,
-            signing_secret=SLACK_SIGNING_SECRET,
-            resolve_user_identity=True,
-            loading_text="Pulling the thread...",
-        )
-    )
-
 
 # ---------------------------------------------------------------------------
 # MCP OAuth — enabled by setting the MCP_CONNECT_SECRET environment variable.
@@ -96,30 +83,54 @@ agent_os = AgentOS(
     scheduler_base_url=agentos_url,
     authorization=runtime_env != "dev",
     authorization_config=AuthorizationConfig(user_isolation=True),
-    # MCP clients can run agno directly
-    mcp=MCPConfig(
-        tools=[
-            agno_team.as_tool(
-                name="agno",
-                title="Agno",
-                description=(
-                    "Talk to Agno, the platform lead. Send plain language. "
-                    "Pass session_id back to continue the conversation."
-                ),
-            )
-        ],
-    ),
+    mcp=True,
     mcp_auth=mcp_auth,
     lifespan=lifespan,
     db=get_postgres_db(),
     knowledge=[shared_knowledge, product_knowledge],
-    agents=[platform_builder, platform_manager, platform_engineer],
-    teams=[agno_team],
+    manager=OSManager(
+        model=default_model(),
+        root=".",
+        knowledge=shared_knowledge,
+        learning=shared_learning,
+        access_docs=True,
+        offload_tool_results=result_store,
+        tools=[get_knowledge_management_tools()],
+        instructions="This is the AgentOS Railway deployment, a product agent platform maintained through Company OS.",
+    ),
+    company=CompanyConfig(db=get_postgres_db(), products=products),
+    queue=QueueConfig(durable=True, db=get_postgres_db(), redis=getenv("REDIS_URL")),
+    agents=[company_analyst, *engineering_agents()],
     workflows=[deployment_check, run_evals],
-    interfaces=interfaces,
     registry=registry,
     config=str(Path(__file__).parent / "config.yaml"),
 )
+# Bind interfaces to the framework-owned team after assembly, before get_app().
+manager_team = agent_os.manager
+assert manager_team is not None
+agent_os.mcp = MCPConfig(
+    default_tools=True,
+    tools=[
+        manager_team.as_tool(
+            name="agno",
+            title="Agno",
+            description=("Talk to OS Manager for this AgentOS. Pass session_id back to continue the conversation."),
+        )
+    ],
+)
+if SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET:
+    from agno.os.interfaces.slack import Slack
+
+    agent_os.interfaces.append(
+        Slack(
+            team=manager_team,
+            streaming=True,
+            token=SLACK_BOT_TOKEN,
+            signing_secret=SLACK_SIGNING_SECRET,
+            resolve_user_identity=True,
+            loading_text="Pulling the thread...",
+        )
+    )
 app = agent_os.get_app()
 
 

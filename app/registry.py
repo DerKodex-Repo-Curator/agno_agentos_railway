@@ -8,7 +8,6 @@ The tools, functions, models, databases, and agents available to AgentOS Studio.
 from agno.registry import Registry
 from agno.tools.calculator import CalculatorTools
 
-from agents.manager import platform_manager
 from app.functions import (
     content_to_file,
     csv_to_markdown_table,
@@ -51,5 +50,4 @@ registry = Registry(
     ],
     learning=[shared_learning],
     knowledge=[shared_knowledge, product_knowledge],
-    agents=[platform_manager],
 )

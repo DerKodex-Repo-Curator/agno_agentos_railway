@@ -76,5 +76,5 @@ def get_file_generation_tools() -> list[FileGenerationTools]:
 
 
 def get_knowledge_management_tools() -> KnowledgeManagementTools:
-    """The write side of the product knowledge base, mounted on Platform Builder."""
+    """The write side of the product knowledge base, mounted on OS Manager."""
     return KnowledgeManagementTools(knowledge=product_knowledge)
