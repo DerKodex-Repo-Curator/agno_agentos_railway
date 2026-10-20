@@ -1,7 +1,39 @@
 #!/usr/bin/env bash
-# Run the API on the host so DockerSandbox can use the host Docker daemon.
+
+############################################################################
+#
+#    Agno Local Development Server
+#
+#    Runs the API on the host so DockerSandbox can use the host Docker daemon.
+#
+#    Usage:
+#      ./scripts/dev.sh
+#      SANDBOX_ENABLED=true ./scripts/dev.sh
+#
+#    Prerequisites:
+#      - uv installed and .env configured
+#      - PostgreSQL running: docker compose up -d agentos-db
+#      - Stop the container API first: docker compose stop agentos-api
+#
+#    Development disables JWT and binds the API to 127.0.0.1.
+#
+############################################################################
+
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# Colors
+ORANGE='\033[38;5;208m'
+DIM='\033[2m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo ""
+echo -e "${ORANGE}▸${NC} ${BOLD}Starting local AgentOS${NC}"
+echo -e "${DIM}Mode: dev (JWT disabled); hot reload enabled${NC}"
+echo -e "${DIM}Press Ctrl+C to stop.${NC}"
+echo ""
+
 export RUNTIME_ENV=dev
 export DB_HOST="${DB_HOST:-127.0.0.1}"
 export DB_PORT="${DB_PORT:-5432}"

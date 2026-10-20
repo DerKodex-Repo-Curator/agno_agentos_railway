@@ -1,16 +1,51 @@
 #!/usr/bin/env bash
-# Uses an existing ECR image and IAM role. Creates/updates one runtime per deployment.
+
+############################################################################
+#
+#    Agno AgentCore Sandbox Runtime
+#
+#    Creates or updates one runtime per deployment, then waits for READY.
+#
+#    Usage:
+#      export SANDBOX_IMAGE=<pushed-ecr-uri>:<tag>
+#      export SANDBOX_RUNTIME_NAME=<unique-deployment-name>
+#      export SANDBOX_EXECUTION_ROLE=<iam-role-arn>
+#      ./scripts/create_sandbox_runtime.sh
+#
+#    Prerequisites:
+#      - uv installed, AWS credentials and an existing runtime IAM role
+#      - ARM64 image pushed with ./scripts/build_sandbox_image.sh push
+#
+#    AWS_REGION defaults to us-east-1. Progress goes to stderr; stdout
+#    contains the ready runtime ARN for use as SANDBOX_RUNTIME_ARN.
+#
+############################################################################
+
 set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${SANDBOX_IMAGE:?Set SANDBOX_IMAGE to the pushed ECR image URI}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
- : "${SANDBOX_RUNTIME_NAME:?Set a unique SANDBOX_RUNTIME_NAME for this deployment}"
+: "${SANDBOX_RUNTIME_NAME:?Set a unique SANDBOX_RUNTIME_NAME for this deployment}"
 export SANDBOX_RUNTIME_NAME
 : "${SANDBOX_EXECUTION_ROLE:?Set SANDBOX_EXECUTION_ROLE to your runtime IAM role ARN}"
 export SANDBOX_EXECUTION_ROLE
+
+# Keep stdout usable by callers capturing the runtime ARN.
+ORANGE='\033[38;5;208m'
+DIM='\033[2m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo "" >&2
+echo -e "${ORANGE}▸${NC} ${BOLD}Configuring AgentCore sandbox runtime${NC}" >&2
+echo -e "${DIM}Runtime: ${SANDBOX_RUNTIME_NAME}; region: ${AWS_REGION}${NC}" >&2
+echo -e "${DIM}Waiting up to 10 minutes for READY...${NC}" >&2
+echo "" >&2
+
 exec uv run --no-project --with-requirements requirements.txt python - <<'PY'
 import os
 import re
+import sys
 import time
 import boto3
 
@@ -40,6 +75,7 @@ else:
 for _ in range(120):
     runtime = control.get_agent_runtime(agentRuntimeId=runtime_id)
     if runtime["status"] == "READY":
+        print("Done. Runtime ready; set SANDBOX_RUNTIME_ARN to the ARN below.", file=sys.stderr)
         print(runtime["agentRuntimeArn"])
         break
     if runtime["status"] not in ("CREATING", "UPDATING"):
