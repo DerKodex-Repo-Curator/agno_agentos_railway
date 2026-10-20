@@ -10,7 +10,7 @@ description: User-driven loop to change an existing agent in this AgentOS — ad
 The user names a change; you implement it, verify it against the live agent, and ask if there's more. Stop when they say done. The autonomous half is [`eval-and-improve`](../eval-and-improve/SKILL.md) — run it afterward.
 
 The platform is on `http://localhost:8000` (`RUNTIME_ENV=dev`); code edits hot-reload.
-When started with `scripts/dev.sh`, run Python via `.venv/bin/python` with `.env`
+When running the API on the host, run Python via `.venv/bin/python` with `.env`
 loaded instead of `docker exec`/`docker compose exec`; inspect the host API log.
 Keep the host process running for sandbox development and restart it after env or
 manifest changes. For MCP checks use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh`.

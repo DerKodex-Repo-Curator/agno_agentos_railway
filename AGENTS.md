@@ -18,7 +18,7 @@ Configure `OSManager(root=".")` in `app/main.py`; never duplicate those componen
 - `db/`: cached synchronous OS database and distinct knowledge content adapters.
 - `evals/`: application cases, behavioral scorers and disposable-database isolation.
 - `sandbox/`: engineering runtime image and minimal-context builder.
-- `scripts/`: local setup, validation, sandbox tooling and Railway deployment.
+- `scripts/`: local setup, validation, image builds and Railway deployment.
 - `.agents/skills/`: coding-agent workflows; `.claude/skills` links here.
 - `compose.yaml`: PostgreSQL and optional development API. No Redis.
 - `Dockerfile`, `railway.json`: production image and single-replica Railway deployment.
@@ -26,15 +26,9 @@ Configure `OSManager(root=".")` in `app/main.py`; never duplicate those componen
 ## Development
 
 Use `/setup-platform` for first run. Copy `example.env` to `.env` only if absent,
-set `OPENAI_API_KEY`, then `docker compose up -d --build`. For Docker engineering:
-
-```sh
-docker compose up -d agentos-db
-./scripts/venv_setup.sh
-./scripts/build_sandbox_image.sh local
-docker compose stop agentos-api
-SANDBOX_ENABLED=true ./scripts/dev.sh
-```
+set `OPENAI_API_KEY`, then `docker compose up -d --build`. For Docker engineering,
+follow the host API commands in the README's Engineers section. Build sandbox images
+directly with `sandbox/build_image.py`; provision AgentCore with your AWS tooling.
 
 Development disables JWT. Production defaults to `prd` and requires verification.
 Never sync `RUNTIME_ENV=dev` to production. Keep application policy in `app/`, settings

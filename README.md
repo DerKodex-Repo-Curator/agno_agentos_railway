@@ -77,9 +77,13 @@ For local Docker sandboxes, run the API on the host so it can reach the Docker d
 ```sh
 docker compose up -d agentos-db
 ./scripts/venv_setup.sh
-./scripts/build_sandbox_image.sh local
+python3 sandbox/build_image.py --tag agno-sandbox:local
 docker compose stop agentos-api
-SANDBOX_ENABLED=true ./scripts/dev.sh
+RUNTIME_ENV=dev DB_HOST=127.0.0.1 DB_PORT=5432 SANDBOX_ENABLED=true \
+  AGENTOS_URL=http://127.0.0.1:8000 \
+  uv run --no-project --env-file .env --with-requirements requirements.txt \
+  uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload \
+  --reload-dir agents --reload-dir app --reload-dir db --reload-dir evals
 # From another terminal:
 MCP_CHECK_HOST=1 ./scripts/mcp_check.sh
 ```
@@ -99,16 +103,15 @@ The API, OS Manager, Company planning and ordinary durable queue remain availabl
 Direct Python harness execution is a separate path and is not verified by API startup.
 
 Production uses AgentCore, an ARM64 runtime image, and a persistent checkpoint volume.
-The API does not need a Docker daemon. Build and provision with:
+The API does not need a Docker daemon. Build an ARM64 image with:
 
 ```sh
-# Set SANDBOX_IMAGE to an ECR URI with an immutable tag,
-# SANDBOX_RUNTIME_NAME and SANDBOX_EXECUTION_ROLE.
-./scripts/build_sandbox_image.sh push
-./scripts/create_sandbox_runtime.sh
+# Set SANDBOX_IMAGE to your ECR URI with an immutable tag.
+python3 sandbox/build_image.py --platform linux/arm64 --tag "${SANDBOX_IMAGE}"
 ```
 
-Set `SANDBOX_RUNTIME_ARN` to the returned ARN and mount a persistent volume at `/data`;
+Push the image to ECR and provision the AgentCore runtime and its execution role through
+your AWS tooling. Set `SANDBOX_RUNTIME_ARN` to that runtime's ARN and mount a persistent volume at `/data`;
 checkpoints use `/data/checkpoints`. Startup rejects AgentCore without that mount.
 Keep one API replica. Direct engineer runs and Company Task
 acceptance/completion are separate verification gates. The template's current immutable
@@ -217,6 +220,5 @@ See [example.env](example.env) for copyable settings. No real credentials belong
 | `ANTHROPIC_API_KEY`, `GITHUB_READ_TOKEN` | Local Claude and optional private repository read access. |
 | `AWS_REGION`, `AWS_PROFILE` | AgentCore host credentials/region; region defaults to `us-east-1`. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Alternative host AWS credentials. |
-| `SANDBOX_RUNTIME_NAME`, `SANDBOX_EXECUTION_ROLE` | Runtime provisioning name and IAM role. |
 | `MCP_CHECK_HOST`, `MCP_CHECK_TOKEN` | Run the probe on the host; optional existing bearer token. |
 | `EVAL_TEST_POSTGRES` | Enable disposable-database integration tests. |

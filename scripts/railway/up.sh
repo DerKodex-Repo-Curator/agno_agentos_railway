@@ -342,7 +342,11 @@ railway add -s pgvector -i agnohq/pgvector:18 \
 echo ""
 echo -e "${ORANGE}▸${NC} ${BOLD}Adding database volume${NC}"
 railway service link pgvector
-railway volume add -m /var/lib/postgresql 2>/dev/null || echo -e "${DIM}Volume already exists or skipped${NC}"
+if ! railway volume add -m /var/lib/postgresql; then
+    echo -e "${RED}${BOLD}Database volume setup failed.${NC} Stopping before application deployment."
+    echo -e "${DIM}Inspect the pgvector service and verify a volume is mounted at /var/lib/postgresql before continuing.${NC}"
+    exit 1
+fi
 
 echo ""
 echo -e "${DIM}Waiting 15s for database...${NC}"

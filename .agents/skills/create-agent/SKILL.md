@@ -8,7 +8,7 @@ description: Add a new agent to this AgentOS. Runs guided discovery or takes a c
 > _Coding-agent workflow: run as `/create-agent` or by describing the task._
 
 The platform is on `http://localhost:8000` (`RUNTIME_ENV=dev`); code edits hot-reload.
-When started with `scripts/dev.sh`, run Python via `.venv/bin/python` with `.env`
+When running the API on the host, run Python via `.venv/bin/python` with `.env`
 loaded instead of `docker exec`/`docker compose exec`; inspect the host API log.
 Keep the host process running for sandbox development and restart it after env or
 manifest changes. For MCP checks use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh`.
