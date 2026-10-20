@@ -62,9 +62,6 @@ uv pip install --python "${VENV_DIR}/bin/python" -r "${REPO_ROOT}/requirements.t
 echo ""
 echo -e "    ${DIM}Installing project in editable mode with dev dependencies...${NC}"
 echo -e "    ${DIM}> uv pip install --python ${VENV_DIR}/bin/python -c requirements.txt -e .[dev]${NC}"
-# Quotes matter twice here: a clone path with a space, and `[dev]` — unquoted, bash
-# reads it as a glob character class and silently rewrites the path when a sibling
-# file happens to match.
 uv pip install --python "${VENV_DIR}/bin/python" -c "${REPO_ROOT}/requirements.txt" -e "${REPO_ROOT}[dev]" --quiet
 
 # Copy activation command to clipboard

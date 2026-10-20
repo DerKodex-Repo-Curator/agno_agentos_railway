@@ -1,24 +1,27 @@
-"""python -m evals [--tag smoke|release|live] [--name CASE] [--json-output FILE]."""
+"""python -m evals [--name CASE] [--tag smoke] [--json-output FILE]."""
 
-import asyncio
+import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from evals.isolation import ROOT, run_isolated
-
 
 def main() -> int:
-    load_dotenv(ROOT / ".env")
-    arguments = sys.argv[1:]
-    # The worker reads sources from a temporary directory; output belongs to the caller.
-    for i, argument in enumerate(arguments):
-        if argument == "--json-output" and i + 1 < len(arguments):
-            arguments[i + 1] = str(Path(arguments[i + 1]).resolve())
-        elif argument.startswith("--json-output="):
-            arguments[i] = "--json-output=" + str(Path(argument.split("=", 1)[1]).resolve())
-    return asyncio.run(run_isolated(arguments))[0]
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    os.environ.setdefault("RUNTIME_ENV", "dev")
+
+    from agno.eval import cli
+    from agno.os.utils import collect_mcp_tools_from_team
+
+    from app.settings import default_model
+    from evals.cases import CASES, agent_os
+
+    assert agent_os.db is not None and agent_os.manager is not None
+    agent_os.db._create_all_tables()
+    mcp_tools: list = []
+    collect_mcp_tools_from_team(agent_os.manager, mcp_tools)
+    return cli(CASES, db=agent_os.db, judge_model=default_model(), default_timeout=180, mcp_tools=mcp_tools)
 
 
 if __name__ == "__main__":

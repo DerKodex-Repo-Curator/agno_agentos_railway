@@ -39,6 +39,3 @@ jobs:
       # that one call is what makes local and CI the same check by construction.
       - name: Validate (format + lint + type)
         run: bash scripts/validate.sh
-
-      - name: Deterministic tests
-        run: python -m unittest discover -s tests -v

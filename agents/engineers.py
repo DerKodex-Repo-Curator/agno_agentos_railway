@@ -6,7 +6,7 @@ from agno.agents.base import BaseExternalAgent
 from agno.agents.claude import ClaudeAgent
 from agno.agents.codex import CodexAgent
 
-from app.sandbox import repository, sandbox
+from app.sandbox import REPOSITORY, sandbox_provider
 from db import get_postgres_db
 
 INSTRUCTIONS = """\
@@ -21,6 +21,8 @@ never claim an action or check succeeded without evidence.
 """
 
 db = get_postgres_db()
+sandbox = sandbox_provider()
+repository = REPOSITORY if sandbox is not None else None
 cwd = str(Path(__file__).resolve().parents[1]) if sandbox is None else None
 
 claude_engineer = ClaudeAgent(

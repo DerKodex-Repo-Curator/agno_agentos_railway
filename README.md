@@ -77,7 +77,8 @@ For local Docker sandboxes, run the API on the host so it can reach the Docker d
 ```sh
 docker compose up -d agentos-db
 ./scripts/venv_setup.sh
-python3 sandbox/build_image.py --tag agno-sandbox:local
+docker build --target sandbox --load -t agno-sandbox:local .
+docker image inspect agno-sandbox:local --format '{{.Id}}'
 docker compose stop agentos-api
 RUNTIME_ENV=dev DB_HOST=127.0.0.1 DB_PORT=5432 SANDBOX_ENABLED=true \
   AGENTOS_URL=http://127.0.0.1:8000 \
@@ -107,7 +108,8 @@ The API does not need a Docker daemon. Build an ARM64 image with:
 
 ```sh
 # Set SANDBOX_IMAGE to your ECR URI with an immutable tag.
-python3 sandbox/build_image.py --platform linux/arm64 --tag "${SANDBOX_IMAGE}"
+docker build --target sandbox --platform linux/arm64 --load -t "${SANDBOX_IMAGE}" .
+docker image inspect "${SANDBOX_IMAGE}" --format '{{.Id}}'
 ```
 
 Push the image to ECR and provision the AgentCore runtime and its execution role through
@@ -145,28 +147,31 @@ Company uses the framework scheduler.
 source .venv/bin/activate
 ./scripts/format.sh
 ./scripts/validate.sh
-python -m unittest discover -s tests -v
-EVAL_TEST_POSTGRES=true python -m unittest discover -s tests -v
 python -m evals --tag smoke --json-output tmp/evals.json
 ```
 
-Model evals spend model calls and require PostgreSQL with CREATEDB. Every suite runs
-in a separate process with an owned disposable database; cleanup drops only that
-database after the worker exits. The worker reads a sanitized application source copy.
-It disables Slack and sandboxes and does not start the scheduler. Never run mutating probes on shared data
-or use snapshot/diff deletion. Sandbox cases need a separately contained sandbox fixture.
+Model evals use the application's `.env`, database and workspace and spend model calls.
+The CLI defaults to development mode unless `RUNTIME_ENV` is explicitly configured.
+Sessions and eval results persist in the configured database for the AgentOS UI.
+The CLI does not start the API server or scheduler.
 
-The cases in [evals/cases.py](evals/cases.py) check source-backed onboarding, diagnostics,
-and evidence-backed Company proposals. Deterministic scorers inspect tool payloads and
-persisted state. `--json-output` retains the report and a sibling `.evidence.jsonl` before
-the disposable database is removed. Use `--name <case>` to select one case or `--list`
+The three cases in [evals/cases.py](evals/cases.py) check onboarding, diagnostics and
+the application's learning configuration. They use Agno's built-in answer criteria
+and expected tool-call checks. Add application cases here; generic manager and Company
+behavior belongs in Agno's coverage. `--json-output` saves Agno's report (answers,
+tool names and verdicts). Use `--name <case>` to select one case or `--list`
 to inspect the suite without model calls.
 
 Dependencies flow from `pyproject.toml` through `scripts/generate_requirements.sh` to
 committed `requirements.txt`. Docker, CI and host setup use those requirements. There
 is no `uv.lock`; use `uv run --no-project` when invoking uv outside the activated venv.
-After changing dependencies, regenerate requirements and rebuild. Keep the Agno commit
-in `pyproject.toml` and `sandbox/Dockerfile` aligned until the required APIs are released.
+After changing dependencies, regenerate requirements and rebuild.
+
+The root [Dockerfile](Dockerfile) has two targets sharing the same pinned dependencies:
+`agentos` serves the API and is the default for Railway and Compose; `sandbox` starts the
+execution runtime and does not copy application code. Build the API locally with
+`docker build --target agentos --load -t agentos:local .`. Both builds use the root
+`.dockerignore` to exclude local credentials, caches and working data.
 
 ## Deploy on Railway
 
@@ -207,8 +212,7 @@ See [example.env](example.env) for copyable settings. No real credentials belong
 | `RUNTIME_ENV` | `prd`; Compose/host development set `dev`. |
 | `JWT_VERIFICATION_KEY` / `JWT_JWKS_FILE` | Production JWT verification; choose one. |
 | `AGENTOS_URL` | Scheduler/OAuth origin; default `http://127.0.0.1:8000`. |
-| `MCP_CONNECT_SECRET` | Optional OAuth connect secret, at least 16 characters. |
-| `AGENTOS_MCP_SIGNING_KEY` | Optional high-entropy OAuth signing material, at least 32 characters. If unset, Agno generates and persists a key in PostgreSQL across redeploys. |
+| `MCP_CONNECT_SECRET` | Optional OAuth connect secret, at least 16 characters. Agno generates the signing key and persists it in PostgreSQL across redeploys. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_DATABASE` | Defaults: `localhost`, `5432`, `ai`, `ai`, `ai`. |
 | `DB_DRIVER` | `postgresql+psycopg`. |
 | `PARALLEL_API_KEY` | Optional authenticated web access; otherwise keyless MCP. |
@@ -221,4 +225,3 @@ See [example.env](example.env) for copyable settings. No real credentials belong
 | `AWS_REGION`, `AWS_PROFILE` | AgentCore host credentials/region; region defaults to `us-east-1`. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Alternative host AWS credentials. |
 | `MCP_CHECK_HOST`, `MCP_CHECK_TOKEN` | Run the probe on the host; optional existing bearer token. |
-| `EVAL_TEST_POSTGRES` | Enable disposable-database integration tests. |

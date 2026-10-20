@@ -3,6 +3,7 @@
 This is a thin application over Agno. `CLAUDE.md` links here. Agno owns OS Manager
 (`os-manager-internal`), its members, source tools, Studio and Company Product Manager.
 Configure `OSManager(root=".")` in `app/main.py`; never duplicate those components.
+Generic manager instructions belong in Agno. Keep this template to application wiring.
 
 ## Layout
 
@@ -16,19 +17,20 @@ Configure `OSManager(root=".")` in `app/main.py`; never duplicate those componen
 - `agents/engineers.py`: Claude and Codex engineers, with stable existing IDs and optional sandboxes.
 - `teams/`: place user-defined teams here; no Engineering team ships yet.
 - `db/`: cached synchronous OS database and distinct knowledge content adapters.
-- `evals/`: application cases, behavioral scorers and disposable-database isolation.
-- `sandbox/`: engineering runtime image and minimal-context builder.
+- `evals/`: a CLI entrypoint and application cases using Agno's built-in eval checks.
 - `scripts/`: local setup, validation, image builds and Railway deployment.
 - `.agents/skills/`: coding-agent workflows; `.claude/skills` links here.
 - `compose.yaml`: PostgreSQL and optional development API. No Redis.
-- `Dockerfile`, `railway.json`: production image and single-replica Railway deployment.
+- `Dockerfile`: shared dependencies with `agentos` (default) and `sandbox` targets.
+- `railway.json`: single-replica Railway deployment.
 
 ## Development
 
 Use `/setup-platform` for first run. Copy `example.env` to `.env` only if absent,
 set `OPENAI_API_KEY`, then `docker compose up -d --build`. For Docker engineering,
 follow the host API commands in the README's Engineers section. Build sandbox images
-directly with `sandbox/build_image.py`; provision AgentCore with your AWS tooling.
+with `docker build --target sandbox --load -t agno-sandbox:local .`; provision AgentCore
+with your AWS tooling.
 
 Development disables JWT. Production defaults to `prd` and requires verification.
 Never sync `RUNTIME_ENV=dev` to production. Keep application policy in `app/`, settings
@@ -37,8 +39,8 @@ in environment variables, local services in Compose and production in `railway.j
 Use `./scripts/venv_setup.sh`, activate `.venv`, then `./scripts/format.sh` and
 `./scripts/validate.sh`. `pyproject.toml` declares dependencies; regenerate the pinned
 `requirements.txt` with `./scripts/generate_requirements.sh`. Do not add a competing
-`uv.lock`. Use `uv run --no-project` outside the activated environment. Keep application
-and sandbox Agno pins aligned until a release provides the required APIs.
+`uv.lock`. Use `uv run --no-project` outside the activated environment. Both Dockerfile
+targets install the same requirements; rebuild both after dependency changes.
 
 ## Capabilities and ownership
 
@@ -74,11 +76,12 @@ the template. No application-owned queue, sandbox lifecycle or Company state mac
 
 ## Verification
 
-Run `python -m unittest discover -s tests -v`; add `EVAL_TEST_POSTGRES=true` for database
-checks. Run model cases only through `python -m evals`, which creates an owned disposable
-database and a separate worker. Never use shared-database snapshot/diff deletion. Preserve
-ownership and cancellation guards. Read-only cases reject mutation attempts and business-state
-changes; mutation cases check persisted evidence. External effects need contained fixtures.
+Use `./scripts/validate.sh` for format, lint and type checks; CI runs the same command.
+Keep the starter lean: no bundled regression-test suite. Add tests when a user's application needs them.
+Run model cases through `python -m evals`, using the application's configured database
+and workspace. Eval sessions and results persist there for the AgentOS UI. Keep evals
+to `__main__.py` and `cases.py`, using Agno's `criteria` and `expected_tool_calls`.
+Do not add custom isolation, scorers or cleanup machinery by default.
 
 `python -m evals --tag smoke` spends model calls. `scripts/mcp_check.sh` defaults to an
 initialize/list-tools probe; --prompt spends model calls. Record verification in

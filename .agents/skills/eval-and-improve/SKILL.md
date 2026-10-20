@@ -7,7 +7,7 @@ description: Run the eval suite (python -m evals), diagnose every failure, fix w
 
 > _Coding-agent workflow: run as `/eval-and-improve` or by describing the task._
 
-Run the suite, diagnose every failure, fix what's in scope, stop when green. Cases live in [`evals/cases.py`](../../../evals/cases.py) (`agno.eval.Case`), the state snapshots in [`evals/hooks.py`](../../../evals/hooks.py) and ownership guards in [`evals/isolation.py`](../../../evals/isolation.py), the entrypoint in [`evals/__main__.py`](../../../evals/__main__.py). Each case uses an LLM judge (`criteria`), a tool-call assertion (`expected_tool_calls`), and/or a deterministic `scorer`.
+Run the suite, diagnose every failure, fix what's in scope, stop when green. Cases live in [`evals/cases.py`](../../../evals/cases.py) (`agno.eval.Case`) and the CLI entrypoint in [`evals/__main__.py`](../../../evals/__main__.py). The three application cases use Agno's built-in `criteria` and `expected_tool_calls`. Keep the starter to these two files; do not add custom scorers, isolation or cleanup machinery by default.
 
 ## 0. Preconditions
 
@@ -27,12 +27,9 @@ python -m evals --json-output out.json # machine-readable (carries judge_reason)
 python -m evals -v                     # stream the runs
 ```
 
-Exit 0 = all passed. Every CLI run creates a separate process and an owned,
-disposable PostgreSQL database. Do not import cases into the served process or run
-shared-database cleanup sweeps. The DB role needs CREATEDB privileges.
-Use `--json-output` to retain results; the isolated eval history is removed with its
-database. Inspect errors rather
-than assuming stderr noise is harmless.
+Exit 0 = all passed. The CLI uses the application's `.env`, database and workspace;
+sessions and eval results persist for the AgentOS UI. Use `--json-output` to export
+answers, tool names and verdicts. Inspect errors rather than assuming stderr noise is harmless.
 
 ## 2. Diagnose
 
@@ -70,15 +67,13 @@ Case(
     tags=("release",),           # smoke = fast core checks; live = depends on today's web
     criteria="<rubric>",
     expected_tool_calls=("<tool_name>",),
-    scorer=<behavioral_scorer>,  # verify successful payloads and durable state, not just tool names
-    setup=<behavioral_scorer>.setup,
 )
 ```
 
-Only a completed run is graded; a paused, cancelled, or errored run fails. Assert
-persisted state before database cleanup. Negative/read-only cases must reject both
-mutation attempts and durable changes. Keep external effects contained: database
-isolation does not isolate arbitrary third-party APIs. Do not add template prompt
+Only a completed run is graded; a paused, cancelled, or errored run fails.
+Tool-call checks prove invocation, not successful payloads or persisted state;
+inspect those when auditing results. Mutating cases need explicitly owned fixtures
+and contained external effects. Do not add template prompt
 policy to compensate for a framework defect; report that boundary explicitly.
 
 ## 6. Derive new probes when hardening an agent
@@ -86,7 +81,7 @@ policy to compensate for a framework defect; report that boundary explicitly.
 Read its instructions and sample recent sessions read-only. Treat observed answers as
 scenarios, never golden answers; remove private content from fixtures. Derive golden-path,
 edge, refusal and adversarial cases for the stated behavior. Run probes only through
-`python -m evals` with isolated fixtures. For tool use, inspect successful payloads,
+`python -m evals` with explicitly owned fixtures. For tool use, inspect successful payloads,
 persisted state and child-run evidence. Change one instruction/tool decision at a time;
 re-run failed cases plus relevant regressions. Keep a useful probe as a permanent case
 through `/create-evals`. Report environment failures separately from behavioral failures.

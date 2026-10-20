@@ -21,11 +21,12 @@ The user's choice, or the least-covered component — almost always one of their
 
 Read the file (or the published config: `get_postgres_db().get_config(component_id="<id>")["config"]`). Every "always", "never", "use X for Y" is a case. Note the tools for reliability assertions.
 
-Run every case through `python -m evals`; the worker requires an owned disposable
-database. Define fixtures in that database, including published configs needed by
-Studio-built agents; never load or mutate an operator's live components as fixtures.
-Use `Behavior` from `evals/scorers.py` for read-only state/attempt checks, or a scorer
-that verifies the requested stored mutation. No snapshot/diff deletion hooks remain.
+Run every case through `python -m evals`, which uses the application's `.env`,
+database and workspace. Sessions and results persist. Do not mutate existing user
+components as fixtures; mutating cases need explicitly owned fixtures.
+Use Agno's built-in `criteria` and `expected_tool_calls`. Keep generic Agno behavior
+in framework coverage; do not add custom scorers, isolation or cleanup machinery
+to the starter by default.
 
 ## 3. Mine the platform
 
@@ -56,16 +57,12 @@ Case(
     timeout_seconds=90,
     criteria="<specific, falsifiable>",
     expected_tool_calls=("<tool>",),
-    scorer=<behavioral_scorer>,
-    setup=<behavioral_scorer>.setup,
 )
 ```
 
-Pair the judge with a deterministic scorer whenever tools are involved. Require
-successful payloads with the right arguments and expected stored state. Tool names
-alone can pass on failed calls, drafts, index-only reads or unrelated resources.
-For read-only/refusal cases, reject mutation attempts and compare durable state.
-Ask of every rubric: could prose alone pass? If so, add an observable assertion.
+Pair answer criteria with `expected_tool_calls` when a tool is required.
+Tool-call checks verify invocation, not successful payloads or persisted state;
+inspect those when auditing a run rather than claiming the built-in check proves them.
 
 Use unique fixture names and isolated users. External mutations (messages, files,
 third-party APIs) require their own containment or must stay outside the suite.
@@ -76,10 +73,10 @@ third-party APIs) require their own containment or must stay outside the suite.
 python -m evals --name <case>
 ```
 
-Run only through the isolated CLI; never sweep shared data. Read both sides of the verdict: the response and tools fired, and `judge_reason` (`--json-output`). Run at least twice (three times for judgment words like "compact"); a flipping verdict means the rubric is undecided. If the agent, not the case, is wrong, say so — that's [`eval-and-improve`](../eval-and-improve/SKILL.md).
+Run through `python -m evals`; results persist in the application's database for the UI. Read both sides of the verdict: the response and tools fired, and `judge_reason` (`--json-output`). Run at least twice (three times for judgment words like "compact"); a flipping verdict needs investigation. If the agent, not the case, is wrong, say so — that's [`eval-and-improve`](../eval-and-improve/SKILL.md).
 
 Loop to Step 4 or finish.
 
 ## 7. Hand over
 
-New cases by name and tag, `git diff evals/cases.py`, suggested commit `eval(<agent>): …`. `smoke` cases run on demand through the isolated CLI; failures go to [`/eval-and-improve`](../eval-and-improve/SKILL.md).
+New cases by name and tag, `git diff evals/cases.py`, suggested commit `eval(<agent>): …`. `smoke` cases run on demand through `python -m evals`; failures go to [`/eval-and-improve`](../eval-and-improve/SKILL.md).

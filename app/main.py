@@ -12,7 +12,6 @@ from agno.os import AgentOS, CompanyConfig, OSManager
 from agents.engineers import engineers
 from app.company import products
 from app.interfaces import attach_interfaces, mcp_auth
-from app.manager import MANAGER_INSTRUCTIONS
 from app.registry import registry, shared_knowledge, shared_learning
 from app.settings import manager_model
 from db import get_postgres_db
@@ -31,10 +30,8 @@ agent_os = AgentOS(
     mcp_auth=mcp_auth(agentos_url),
     authorization=runtime_env != "dev",
     manager=OSManager(
-        model=manager_model(),
-        instructions=MANAGER_INSTRUCTIONS,
         root=".",
-        knowledge=shared_knowledge,
+        model=manager_model(),
         learning=shared_learning,
     ),
     company=CompanyConfig(products=products, model=manager_model()),

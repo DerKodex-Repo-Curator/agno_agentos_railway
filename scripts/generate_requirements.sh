@@ -33,9 +33,7 @@ if [[ "${1:-}" = "upgrade" ]]; then
     UV_CUSTOM_COMPILE_COMMAND="./scripts/generate_requirements.sh upgrade" \
         uv pip compile "${REPO_ROOT}/pyproject.toml" --no-cache --upgrade -o "${REPO_ROOT}/requirements.txt"
 elif [[ $# -gt 0 ]]; then
-    # Refresh only the named packages; every other pin stays put. Needed when a pin
-    # is held by a floor rather than the pyproject pin (agno floors agnoctl at the
-    # previous published release, so a plain regen never moves it).
+    # Refresh only the named packages.
     UPGRADE_FLAGS=()
     for pkg in "$@"; do
         UPGRADE_FLAGS+=("--upgrade-package" "$pkg")

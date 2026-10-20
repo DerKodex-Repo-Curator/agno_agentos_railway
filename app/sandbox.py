@@ -1,4 +1,4 @@
-"""Optional Docker development and AgentCore production sandboxes."""
+"""Optional Docker and AgentCore sandboxes."""
 
 from os import getenv
 from pathlib import Path
@@ -14,7 +14,17 @@ PRODUCTION_VOLUME = Path("/data")
 
 def sandbox_provider() -> Sandbox | None:
     runtime = getenv("RUNTIME_ENV", "prd")
-    if runtime == "dev" and getenv("SANDBOX_ENABLED", "").lower() == "true":
+    enabled = getenv("SANDBOX_ENABLED", "false").lower()
+    runtime_arn = getenv("SANDBOX_RUNTIME_ARN", "")
+    if runtime not in {"dev", "prd"}:
+        raise ValueError("RUNTIME_ENV must be dev or prd")
+    if enabled not in {"true", "false"}:
+        raise ValueError("SANDBOX_ENABLED must be true or false")
+    if runtime == "dev" and runtime_arn:
+        raise ValueError("SANDBOX_RUNTIME_ARN requires RUNTIME_ENV=prd")
+    if runtime == "prd" and enabled == "true":
+        raise ValueError("SANDBOX_ENABLED is for development; use SANDBOX_RUNTIME_ARN in production")
+    if runtime == "dev" and enabled == "true":
         return DockerSandbox(
             image=getenv("SANDBOX_IMAGE") or "agno-sandbox:local",
             network="isolated",
@@ -22,7 +32,7 @@ def sandbox_provider() -> Sandbox | None:
             checkpoints=FileCheckpointStore(LOCAL_CHECKPOINTS),
             env={"GITHUB_READ_TOKEN": token} if (token := getenv("GITHUB_READ_TOKEN")) else None,
         )
-    if runtime == "prd" and (runtime_arn := getenv("SANDBOX_RUNTIME_ARN")):
+    if runtime_arn:
         from agno.sandbox.agentcore import AgentCoreSandbox
 
         if not PRODUCTION_VOLUME.is_mount():
@@ -36,7 +46,3 @@ def sandbox_provider() -> Sandbox | None:
             checkpoints=FileCheckpointStore(PRODUCTION_VOLUME / "checkpoints"),
         )
     return None
-
-
-sandbox = sandbox_provider()
-repository = REPOSITORY if sandbox is not None else None

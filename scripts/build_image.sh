@@ -47,8 +47,8 @@ echo -e "    ${DIM}Image: ${IMAGE_NAME}:${IMAGE_TAG}${NC}"
 echo -e "    ${DIM}Platforms: linux/amd64, linux/arm64${NC}"
 echo ""
 
-echo -e "    ${DIM}> docker buildx build --platform=linux/amd64,linux/arm64 -t ${IMAGE_NAME}:${IMAGE_TAG} -f ${DOCKER_FILE} ${OS_ROOT} --push${NC}"
-docker buildx build --platform=linux/amd64,linux/arm64 -t "${IMAGE_NAME}:${IMAGE_TAG}" -f "${DOCKER_FILE}" "${OS_ROOT}" --push
+echo -e "    ${DIM}> docker buildx build --target agentos --platform=linux/amd64,linux/arm64 -t ${IMAGE_NAME}:${IMAGE_TAG} -f ${DOCKER_FILE} ${OS_ROOT} --push${NC}"
+docker buildx build --target agentos --platform=linux/amd64,linux/arm64 -t "${IMAGE_NAME}:${IMAGE_TAG}" -f "${DOCKER_FILE}" "${OS_ROOT}" --push
 
 echo ""
 echo -e "    ${BOLD}Done.${NC}"
