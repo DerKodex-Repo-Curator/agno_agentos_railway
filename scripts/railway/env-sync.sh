@@ -16,6 +16,7 @@
 #    Variables are pushed with --skip-deploys and one redeploy is triggered
 #    at the end, so a twenty-variable file costs one build instead of twenty.
 #    A railway CLI without that flag falls back to its own deploy-per-variable.
+#    With --no-deploy, that older CLI is rejected before uploading anything.
 #
 #    Optional environment:
 #      ALLOW_UNAUTHENTICATED_DEPLOY  set to 1 to let RUNTIME_ENV=dev through,
@@ -92,9 +93,15 @@ ${line}"
     fi
 
     if [[ -n "$quote" ]]; then
-        closing_quote="^(.*)${quote}[[:space:]]*(#.*)?$"
+        # Stop at the first unescaped closing quote. A quote in an inline
+        # comment belongs to the comment, never to the value.
+        closing_quote="^(([^${quote}\\\\]|\\\\.)*)${quote}(.*)$"
         [[ "$current_value" =~ $closing_quote ]] || continue
         current_value="${BASH_REMATCH[1]}"
+        trailing="${BASH_REMATCH[3]}"
+        if [[ ! "$trailing" =~ ^[[:space:]]*(#.*)?$ ]]; then
+            invalid_env "$value_line" "unexpected text after closing quote"
+        fi
         quote=""
         if [[ "$current_value" == *"-----BEGIN"* && "$current_value" != *"-----END"* ]]; then
             invalid_env "$value_line" "PEM block is missing its END marker"
@@ -134,6 +141,11 @@ fi
 # variable instead of dying on an unknown argument.
 VAR_SET_FLAGS=()
 railway variables --help 2>&1 | grep -q -- '--skip-deploys' && VAR_SET_FLAGS=(--skip-deploys)
+if [[ -z "$REDEPLOY" && ${#VAR_SET_FLAGS[@]} -eq 0 ]]; then
+    echo -e "${RED}${BOLD}Cannot honor --no-deploy.${NC} This Railway CLI does not support --skip-deploys." >&2
+    echo "Upgrade the Railway CLI before retrying. No variables were uploaded." >&2
+    exit 1
+fi
 
 echo ""
 echo -e "${ORANGE}▸${NC} ${BOLD}Syncing env vars${NC}"

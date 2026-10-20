@@ -16,11 +16,11 @@ curl -fsS http://localhost:8000/health
 ./scripts/mcp_check.sh
 ```
 
-The MCP check initializes the connection and verifies the tool names without a model
+The MCP check initializes the connection and verifies the required tools without a model
 call. Supply a prompt to also test OS Manager (spends model calls):
 
 ```sh
-./scripts/mcp_check.sh "Without using tools, introduce yourself briefly."
+./scripts/mcp_check.sh --prompt "Without using tools, introduce yourself briefly."
 ```
 
 Connect [AgentOS](https://os.agno.com) to `http://localhost:8000` and select OS Manager.

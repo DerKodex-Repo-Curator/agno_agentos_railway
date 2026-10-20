@@ -81,7 +81,7 @@ ownership and cancellation guards. Read-only cases reject mutation attempts and 
 changes; mutation cases check persisted evidence. External effects need contained fixtures.
 
 `python -m evals --tag smoke` spends model calls. `scripts/mcp_check.sh` defaults to an
-initialize/list-tools probe; passing a prompt spends model calls. Record verification in
+initialize/list-tools probe; --prompt spends model calls. Record verification in
 `tmp/VERIFY.md`, separating static, deterministic, model, container and hosted results.
 Before upgrading an existing deployment, inspect saved schedules and Studio references to
 removed components. Do not delete historical sessions, notes or Company records.

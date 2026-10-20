@@ -57,7 +57,7 @@ For this host path use `MCP_CHECK_HOST=1 ./scripts/mcp_check.sh` below.
 
 ## 4. Prove it
 
-`./scripts/mcp_check.sh` initializes MCP and verifies the tool surface without a model call. For an answer, pass an explicit read-only prompt; that spends model calls. Report which check was actually run.
+`./scripts/mcp_check.sh` initializes MCP and verifies the required tools without a model call. For an answer, use `--prompt "<read-only prompt>"`; that spends model calls. Report which check was actually run.
 
 ## 5. Connect the AgentOS UI
 
