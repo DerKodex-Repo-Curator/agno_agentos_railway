@@ -78,21 +78,27 @@ class PostgresIsolation(unittest.IsolatedAsyncioTestCase):
                             """
 from evals.isolation import require_isolation
 require_isolation()
-from app.main import agent_os, manager_team
+from app.main import agent_os
+manager_team = agent_os.manager
 from app.company import products
-from app.knowledge import shared_knowledge, product_knowledge
-from app.registry import registry
-from app.notes import notes
+from app.registry import registry, shared_knowledge, shared_learning, shared_notes
 from db import get_postgres_db
 import os
 assert agent_os.db is get_postgres_db()
-assert agent_os.company.db is agent_os.db
+assert agent_os._company_db is agent_os.db
 assert agent_os.queue.db is agent_os.db
-for kb in (shared_knowledge, product_knowledge):
-    assert kb.contents_db.db_engine.url.database == os.environ['DB_DATABASE']
-    assert kb.vector_db.db_engine.url.database == os.environ['DB_DATABASE']
-assert notes.backend.db_engine.url.database == os.environ['DB_DATABASE']
-assert not any(a.id in ('codex-engineer', 'claude-engineer') for a in agent_os.agents)
+assert agent_os.queue.redis is None
+assert not agent_os.workflows
+assert [t.id for t in agent_os.teams] == ["os-manager-internal"]
+assert shared_knowledge.contents_db.db_engine.url.database == os.environ['DB_DATABASE']
+assert shared_knowledge.vector_db.db_engine.url.database == os.environ['DB_DATABASE']
+assert shared_learning.db is agent_os.db
+assert shared_notes.backend.db_engine is agent_os.db.db_engine
+assert registry.knowledge == [shared_knowledge]
+assert [a.id for a in agent_os.agents] == ['claude-engineer', 'codex-engineer']
+assert agent_os.product_manager in manager_team.members
+assert registry.get_agent('product-manager-internal') is None
+assert all(a.sandbox is None for a in agent_os.agents if a.id.endswith('-engineer'))
 assert not agent_os.interfaces
 assert not products[0].routines
 assert not any(type(t).__name__ in ('OpenAITools', 'SlackTools') for t in registry.tools)
@@ -118,8 +124,7 @@ assert not any(type(t).__name__ == 'KnowledgeManagementTools' for t in manager_t
         self.assertEqual(code, 2)
         self.assertEqual(self.databases(), before)
 
-    def test_optional_capabilities_require_explicit_flags(self):
-        # CompanyTools initializes tables, so even configuration checks use an owned DB.
+    def test_legacy_maintenance_flag_does_not_seed_removed_routines(self):
         with isolated_environment() as (env, directory):
             result = subprocess.run(
                 [
@@ -129,14 +134,11 @@ assert not any(type(t).__name__ == 'KnowledgeManagementTools' for t in manager_t
 import importlib
 import os
 from app import company
-from app.tools import get_media_tools, get_slack_tools
 os.environ.update(OPENAI_API_KEY='test-key-no-requests', SLACK_BOT_TOKEN='test-token-no-requests')
 for enabled in ('', 'false', 'true'):
-    os.environ.update(ENABLE_MAINTENANCE=enabled, ENABLE_MEDIA_TOOLS=enabled, ENABLE_SLACK_TOOLS=enabled)
+    os.environ.update(ENABLE_MAINTENANCE=enabled)
     configured = importlib.reload(company)
-    assert len(configured.products[0].routines) == (3 if enabled == 'true' else 0)
-    assert bool(get_media_tools()) == (enabled == 'true')
-    assert bool(get_slack_tools()) == (enabled == 'true')
+    assert not configured.products[0].routines
 """,
                 ],
                 cwd=directory,
@@ -181,7 +183,7 @@ for enabled in ('', 'false', 'true'):
                 )
                 self.assertFalse((await scorer.ascore(response)).passed)
                 scorer.setup()
-                FileSystem(db, namespace="shared-notes").write("unexpected.txt", "unexpected note")
+                FileSystem(db, namespace="eval-fixture").write("unexpected.txt", "unexpected note")
                 self.assertFalse((await scorer.ascore(response)).passed)
             finally:
                 owned.dispose()
@@ -210,12 +212,12 @@ for enabled in ('', 'false', 'true'):
             try:
                 db = PostgresDb(db_engine=owned)
                 db.upsert_session(
-                    AgentSession(session_id="child-session", agent_id="company-analyst", created_at=1, updated_at=1)
+                    AgentSession(session_id="child-session", agent_id="fixture-reader", created_at=1, updated_at=1)
                 )
                 db.upsert_run(
                     RunOutput(
                         run_id="child",
-                        agent_id="company-analyst",
+                        agent_id="fixture-reader",
                         status=RunStatus.completed,
                         tools=[ToolExecution(tool_name="read_company_source", result="page content")],
                     ),
@@ -225,12 +227,12 @@ for enabled in ('', 'false', 'true'):
                     tools=[
                         ToolExecution(
                             tool_name="run_agent",
-                            tool_args={"agent_id": "company-analyst"},
+                            tool_args={"agent_id": "fixture-reader"},
                             result='{"run_id":"child"}',
                         )
                     ]
                 )
-                scorer = Behavior(db, searched("read_company_source"), allow_agent="company-analyst")
+                scorer = Behavior(db, searched("read_company_source"), allow_agent="fixture-reader")
                 scorer.setup()
                 score = await scorer.ascore(response)
                 self.assertTrue(score.passed, score.reason)

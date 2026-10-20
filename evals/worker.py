@@ -28,9 +28,8 @@ async def main() -> int:
     from agno.os.utils import collect_mcp_tools_from_registry, collect_mcp_tools_from_team
 
     from app.company import products
-    from app.main import agent_os, manager_team
+    from app.main import agent_os
     from app.registry import registry
-    from app.schedules import register_schedules
     from db import get_postgres_db
     from evals.cases import CASES
 
@@ -47,7 +46,7 @@ async def main() -> int:
     company.get_wiki()
     for product in products:
         company.get_wiki(product.id)
-    register_schedules()
+    manager_team = agent_os.manager
     assert manager_team is not None
     mcp_tools: list = []
     collect_mcp_tools_from_registry(registry, mcp_tools)

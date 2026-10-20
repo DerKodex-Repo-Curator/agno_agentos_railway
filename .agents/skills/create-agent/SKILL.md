@@ -41,10 +41,10 @@ Decide these yourself:
 
 | Decision | How |
 |---|---|
-| **Pattern** | **Product agent** when the ask names a product. **Direct tools** ([`app/company.py`](../../../app/company.py)) for ≤2 toolkits — the common case. **Context provider** (`agno.context.workspace.WorkspaceContextProvider`) when it queries one information source. |
+| **Pattern** | **Product agent** when the ask names a product. **Direct tools** (the Agent shape below) for ≤2 toolkits — the common case. **Context provider** (`agno.context.workspace.WorkspaceContextProvider`) when it queries one information source. |
 | **Slug** | From the purpose, kebab-case (`pr-reviewer`). |
 | **Model** | `default_model()`. Override only if asked. |
-| **Toolkits** | From the discovery answers, grounded in docs. Prefer what's in the image and keyless: the Parallel MCP for anything web-facing, `HackerNewsTools`, `CalculatorTools`, `get_shared_notes_tools()` for files and state. |
+| **Toolkits** | From the discovery answers, grounded in docs. Prefer what's in the image and keyless: the Parallel MCP for anything web-facing, `HackerNewsTools`, `CalculatorTools`. |
 | **Memory** | `learning=shared_learning` whenever the agent should know its person across sessions — most agents. Off only when its durable state is the platform's, not a person's (a ledger, a queue). Say which. |
 
 **Stop only for** an API key the chosen toolkit requires that isn't in `.env` (check yourself). Offer: add it to `.env` (never read or print it), or a keyless toolkit already in the image.
@@ -83,7 +83,7 @@ Create `agents/<slug_underscore>.py`:
 
 from agno.agent import Agent
 
-from app.learning import shared_learning
+from app.registry import shared_learning
 from app.settings import default_model
 from db import get_postgres_db
 
@@ -114,26 +114,36 @@ How you <work>:
 ```
 
 - No `offload_tool_results` — that's for the OS Manager and its internal members only.
-- Drop `learning=`/`user_id` only for a stated reason, in a comment. Platform-owned state goes in the shared notebook: `tools=[*get_shared_notes_tools(), ...]` ([`app/notes.py`](../../../app/notes.py)), working files under `<slug>/`.
+- Drop `learning=`/`user_id` only for a stated reason. Company knowledge belongs in Company wiki. For a notebook, import `shared_notes` from `app.registry` and add `shared_notes.tools()` to `tools`. User scoping follows AgentOS user isolation; keep personal profiles in per-user learning.
 - Context provider: spread `provider.get_tools()` into `tools=` and append `provider.instructions()` to the instructions.
-- **Every line ≤120 characters, `INSTRUCTIONS` included** — the repo lints `E501` and ruff won't reflow string literals. Wrap long bullets with a two-space hanging indent like [`app/company.py`](../../../app/company.py).
+- **Every line ≤120 characters, `INSTRUCTIONS` included** — the repo lints `E501` and ruff won't reflow string literals. Wrap long bullets with a two-space hanging indent.
 
 ### The product agent
 
-Answers questions about one product from that product's docs, and nothing else. The recommended first agent (setup-platform hands off here). Two trust rules: **knowledge search is its only tool** (no web tools, no notes — it can answer badly but must not act badly; `learning=shared_learning` stays, so it knows each person across sessions), and **it reads `product-knowledge`, never `shared-knowledge`** (both in [`app/knowledge.py`](../../../app/knowledge.py) — operator content stays out of an end-user agent's retrieval). OS Manager builds the same agent at runtime from the same pieces; this is the code-level twin.
+Answers questions about one product from that product's docs, and nothing else. The recommended first agent (setup-platform hands off here). Two trust rules: **knowledge search is its only tool** (no web tools, no notes — it can answer badly but must not act badly; `learning=shared_learning` stays, so it knows each person across sessions), and **it reads a dedicated product knowledge base, never `shared-knowledge`** — operator content stays out of an end-user agent's retrieval. No product knowledge base ships by default. Declare one in [`app/registry.py`](../../../app/registry.py) when creating this agent; Studio can use it once registered.
 
 Decide and state: slug from the product; root URL (prefer the docs subdomain); page cap **50** — the sitemap in order up to the cap, never a keyword slice (a skipped page turns a true answer into "not documented"). Cost, said once: embeddings under a cent for 50 pages; Parallel spends about one credit per 8 pages.
 
-**Ingest** with the platform's own function ([`app/tools.py`](../../../app/tools.py) — sitemap discovery with indexes followed, Parallel-backed extraction when `PARALLEL_API_KEY` is set with a built-in fetcher otherwise, one row per page with its source URL). Run it inside the container — no host venv needed:
+**Declare the knowledge base** in `app/registry.py` before `registry = Registry(...)`:
 
-```bash
-docker exec agentos-api python -c "import asyncio; from app.tools import get_knowledge_management_tools; \
-print(asyncio.run(get_knowledge_management_tools().aingest_url(None, 'https://docs.example.com')))"
+```python
+product_knowledge = create_knowledge(name="product-knowledge", table_name="product_knowledge")
 ```
 
-It returns `pages`, `route`, and `seconds` (50 pages: ~25s with Parallel, ~2 minutes without). Zero pages is a stop. Re-run it when the docs change — it refreshes in place.
+Add it to `registry.knowledge` and the `AgentOS(knowledge=[...])` list in `app/main.py`.
+Use a product-specific variable, name and table for additional products. Reuse a matching
+existing declaration; do not mix unrelated products or operator documents. Import the
+knowledge object and `shared_learning` from `app.registry` in the new agent.
 
-**The file:** the structure above with `knowledge=product_knowledge` (from [`app/knowledge.py`](../../../app/knowledge.py)), `learning=shared_learning`, and no tools. Write `INSTRUCTIONS` yourself in the product's own terms — its name, how its docs speak, the support channel you saw in the pages — and write them against the failure mode that breaks product agents: **the model remembers the real docs and completes gaps from memory under a real citation** — exact flags, prices, and code that were never in the returned text. A prompt that merely says "answer from the docs, say so if not covered" does not stop it; these three guarantees do, at no cost to covered answers. So the instructions must guarantee:
+**Ingest** through Agno's `KnowledgeManagementTools` bound to that new `product_knowledge`:
+
+```bash
+docker exec agentos-api python -c "import asyncio; from agno.tools.knowledge import KnowledgeManagementTools; from app.registry import product_knowledge; print(asyncio.run(KnowledgeManagementTools(knowledge=product_knowledge).aingest_url(None, 'https://docs.example.com')))"
+```
+
+Inspect the returned result and verify content was stored before testing retrieval. Do not promise a page count, cost or runtime without measuring it. For host development run the same code with the configured venv and environment.
+
+**The file:** the structure above with `knowledge=product_knowledge` (from [`app/registry.py`](../../../app/registry.py)), `learning=shared_learning`, and no tools. Write `INSTRUCTIONS` yourself in the product's own terms — its name, how its docs speak, the support channel you saw in the pages — and write them against the failure mode that breaks product agents: **the model remembers the real docs and completes gaps from memory under a real citation** — exact flags, prices, and code that were never in the returned text. A prompt that merely says "answer from the docs, say so if not covered" does not stop it; these three guarantees do, at no cost to covered answers. So the instructions must guarantee:
 
 - a detail counts as documented only when it appears in text the search returned — a page that merely mentions a topic (a name in a list, a link, a heading) does not document it;
 - only returned Source URLs get cited, never one from memory, and none on a refusal;
@@ -143,14 +153,14 @@ Step 7: three probes, not one — a covered question (details plus a Source URL)
 
 ## 4. Register in `app/main.py`
 
-Import it and put it **first** in `agents=[…]` — it's what the platform is for; the analyst and optional engineering executors come after. That line also puts it on Agno's roster (the team runs every registered agent by name).
+Import it and put it **first** in `agents=[…]` — it's what the platform is for; the Claude and Codex agents come after. AgentOS makes it discoverable to OS Manager through the registry.
 
 ```python
 from agents.<slug_underscore> import <slug_underscore>
 
 agent_os = AgentOS(
     ...
-    agents=[<slug_underscore>, company_analyst, *engineering_agents()],
+    agents=[<slug_underscore>, *engineers],
 )
 ```
 
@@ -184,10 +194,10 @@ Pass = 200 and non-empty content. Studio-builder-pattern agents: probe read-only
 - **404** — not registered, not restarted, or the container is bound to another checkout: `docker inspect agentos-api --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}'`.
 - **5xx** — `docker logs agentos-api --tail 50`: usually an import error, a missing env var, or a typo in `tools=`.
 - **Empty response** — tool errors in the logs (rate limit, key, MCP unreachable). Tell the user.
-- **Tool not firing** — the prompt isn't strong enough; suggest [`improve-agent`](../improve-agent/SKILL.md).
+- **Tool not firing** — the prompt isn't strong enough; suggest [`eval-and-improve`](../eval-and-improve/SKILL.md).
 
 Iterate 2–3 times, then ask.
 
 ## 9. Done
 
-Lead with the smoke-test answer. Then where it lives: `https://os.agno.com` (**Refresh**, Agents list) or `http://localhost:8000`; `/mcp` (`run_agent`); Agno's roster — say that one out loud. Then the loop: [`/extend-agent`](../extend-agent/SKILL.md) (they drive), [`/improve-agent`](../improve-agent/SKILL.md) (you drive), [`/create-evals`](../create-evals/SKILL.md) (offer to persist the smoke test as the first case). A simple agent takes 5–10 minutes; a product agent about the same, ingestion being most of it.
+Lead with the smoke-test answer. Then where it lives: `https://os.agno.com` (**Refresh**, Agents list) or `http://localhost:8000`; `/mcp` (`run_agent`); Agno's roster — say that one out loud. Then the loop: [`/extend-agent`](../extend-agent/SKILL.md) (they drive), [`/eval-and-improve`](../eval-and-improve/SKILL.md) (you drive), [`/create-evals`](../create-evals/SKILL.md) (offer to persist the smoke test as the first case). A simple agent takes 5–10 minutes; a product agent about the same, ingestion being most of it.

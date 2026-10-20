@@ -18,7 +18,7 @@ DATABASE_PATTERN = r"railway_eval_[0-9a-f]{32}"
 
 def source_copy(destination: Path) -> None:
     """Only application sources, never secrets, eval answers or local artifacts."""
-    folders = ("app", "agents", "teams", "workflows", "db", "scripts", ".agents")
+    folders = ("app", "agents", "teams", "db", "scripts", ".agents")
     files = ("README.md", "AGENTS.md", "Dockerfile", "compose.yaml", "railway.json", "pyproject.toml", "example.env")
     for name in files:
         shutil.copyfile(ROOT / name, destination / name)
@@ -57,15 +57,11 @@ def isolated_environment():  # type: ignore[no-untyped-def]
                 RAILWAY_EVAL_DATABASE=database,
                 RAILWAY_EVAL_TOKEN=token,
                 RUNTIME_ENV="dev",
-                REDIS_URL="",
                 SANDBOX_ENABLED="false",
                 SANDBOX_RUNTIME_ARN="",
                 SLACK_BOT_TOKEN="",
                 SLACK_SIGNING_SECRET="",
                 MCP_CONNECT_SECRET="",
-                ENABLE_MEDIA_TOOLS="false",
-                ENABLE_SLACK_TOOLS="false",
-                ENABLE_MAINTENANCE="false",
                 PYTHONPATH=str(ROOT),
             )
             yield env, directory
@@ -105,7 +101,7 @@ def require_isolation() -> None:
 
 
 async def run_isolated(arguments: list[str], *, capture: bool = False, timeout: int = 3600) -> tuple[int, str]:
-    """Both CLI and served workflow use this path; cancellation kills the child first."""
+    """Run the CLI worker; cancellation kills the child before database cleanup."""
     if os.getenv("RAILWAY_EVAL_DATABASE"):
         raise RuntimeError("Nested eval suites are not supported inside an eval worker")
     with isolated_environment() as (env, directory):

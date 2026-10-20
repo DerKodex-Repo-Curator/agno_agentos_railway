@@ -7,7 +7,7 @@ description: Author eval coverage for an agent in this AgentOS — map what the 
 
 > _Coding-agent workflow: run as `/create-evals` or by describing the task._
 
-Turn what an agent promises into `Case` entries in [`evals/cases.py`](../../../evals/cases.py). The template's cases cover the reference components only; a user-built agent is invisible to the suite until this skill writes one. Failing suite → [`eval-and-improve`](../eval-and-improve/SKILL.md); agent needs hardening → [`improve-agent`](../improve-agent/SKILL.md).
+Turn what an agent promises into `Case` entries in [`evals/cases.py`](../../../evals/cases.py). The template's cases cover the reference components only; a user-built agent is invisible to the suite until this skill writes one. Failing suite → [`eval-and-improve`](../eval-and-improve/SKILL.md); agent needs hardening → [`eval-and-improve`](../eval-and-improve/SKILL.md).
 
 Preconditions: Postgres on 5432, venv active (`source .venv/bin/activate`; `./scripts/venv_setup.sh` if missing), `.env` populated.
 
@@ -52,7 +52,7 @@ Case(
     name="<agent>_<capability>",
     agent=<the_agent>,   # a Team goes in team= — nothing catches a team in agent=; it runs, misfiled
     input="<scenario>",
-    tags=("<smoke|release|live>",),  # smoke rides the schedule — deterministic only; live never shares with smoke
+    tags=("<smoke|release|live>",),  # model calls; choose smoke, release or live deliberately
     timeout_seconds=90,
     criteria="<specific, falsifiable>",
     expected_tool_calls=("<tool>",),
@@ -76,10 +76,10 @@ third-party APIs) require their own containment or must stay outside the suite.
 python -m evals --name <case>
 ```
 
-Run only through the isolated CLI; never sweep shared data. Read both sides of the verdict: the response and tools fired, and `judge_reason` (`--json-output`). Run at least twice (three times for judgment words like "compact"); a flipping verdict means the rubric is undecided. If the agent, not the case, is wrong, say so — that's [`improve-agent`](../improve-agent/SKILL.md).
+Run only through the isolated CLI; never sweep shared data. Read both sides of the verdict: the response and tools fired, and `judge_reason` (`--json-output`). Run at least twice (three times for judgment words like "compact"); a flipping verdict means the rubric is undecided. If the agent, not the case, is wrong, say so — that's [`eval-and-improve`](../eval-and-improve/SKILL.md).
 
 Loop to Step 4 or finish.
 
 ## 7. Hand over
 
-New cases by name and tag, `git diff evals/cases.py`, suggested commit `eval(<agent>): …`. `smoke` cases ride the run-evals schedule (ships disabled; enabling is the user's call, with model costs understood); failures go to [`/eval-and-improve`](../eval-and-improve/SKILL.md).
+New cases by name and tag, `git diff evals/cases.py`, suggested commit `eval(<agent>): …`. `smoke` cases run on demand through the isolated CLI; failures go to [`/eval-and-improve`](../eval-and-improve/SKILL.md).

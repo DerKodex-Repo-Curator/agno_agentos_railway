@@ -1,6 +1,6 @@
 ---
 name: eval-and-improve
-description: Run the eval suite (python -m evals), diagnose every failure, fix what's in scope, and loop until all cases pass. Use when evals are failing — including overnight run-evals schedule failures — or when the user wants to run, diagnose, or repair the eval suite. To author new coverage, use create-evals instead.
+description: Run the eval suite (python -m evals), diagnose every failure, fix what's in scope, and loop until all cases pass. Use when evals are failing — or when the user wants to run, diagnose, or repair the eval suite. To author new coverage, use create-evals instead.
 ---
 
 # Eval and Improve
@@ -27,11 +27,11 @@ python -m evals --json-output out.json # machine-readable (carries judge_reason)
 python -m evals -v                     # stream the runs
 ```
 
-Exit 0 = all passed. Every CLI/workflow run creates a separate process and an owned,
+Exit 0 = all passed. Every CLI run creates a separate process and an owned,
 disposable PostgreSQL database. Do not import cases into the served process or run
 shared-database cleanup sweeps. The DB role needs CREATEDB privileges.
 Use `--json-output` to retain results; the isolated eval history is removed with its
-database. Scheduled runs retain the summary in workflow history. Inspect errors rather
+database. Inspect errors rather
 than assuming stderr noise is harmless.
 
 ## 2. Diagnose
@@ -52,7 +52,7 @@ than assuming stderr noise is harmless.
 
 ## 3. Scope
 
-In: `agents/<slug>.py` / `app/main.py` (instructions, tools, model); `evals/cases.py` when an assertion was wrong; a one-line `app/main.py` flip if a case needs it. Out (flag, don't do): removing cases, editing `db/` or `app/` to pass, editing agno. Fast iteration on agent quality is [`improve-agent`](../improve-agent/SKILL.md); a user-driven change is [`extend-agent`](../extend-agent/SKILL.md).
+In: `agents/<slug>.py` / `app/main.py` (instructions, tools, model); `evals/cases.py` when an assertion was wrong; a one-line `app/main.py` flip if a case needs it. Out (flag, don't do): removing cases, editing `db/` or `app/` to pass, editing agno. Fast iteration on agent quality is [`eval-and-improve`](../eval-and-improve/SKILL.md); a user-driven change is [`extend-agent`](../extend-agent/SKILL.md).
 
 ## 4. Re-run and stop
 
@@ -81,7 +81,12 @@ mutation attempts and durable changes. Keep external effects contained: database
 isolation does not isolate arbitrary third-party APIs. Do not add template prompt
 policy to compensate for a framework defect; report that boundary explicitly.
 
-## 6. Over time
+## 6. Derive new probes when hardening an agent
 
-The daily run-evals schedule ships disabled. It uses the same isolated worker as the
-CLI and records a summary in workflow history. Model calls still cost money.
+Read its instructions and sample recent sessions read-only. Treat observed answers as
+scenarios, never golden answers; remove private content from fixtures. Derive golden-path,
+edge, refusal and adversarial cases for the stated behavior. Run probes only through
+`python -m evals` with isolated fixtures. For tool use, inspect successful payloads,
+persisted state and child-run evidence. Change one instruction/tool decision at a time;
+re-run failed cases plus relevant regressions. Keep a useful probe as a permanent case
+through `/create-evals`. Report environment failures separately from behavioral failures.

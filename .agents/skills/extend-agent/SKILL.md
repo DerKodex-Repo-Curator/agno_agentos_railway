@@ -1,13 +1,13 @@
 ---
 name: extend-agent
-description: User-driven loop to change an existing agent in this AgentOS — add a tool/MCP server/toolkit, add a capability (knowledge base, learning/memory, sub-agent, scheduled task), grow the safe Studio registry so components built at runtime gain a new capability, refine its instructions, or fix a specific known bug, verifying each change against the live container. Use whenever the user names a concrete change to an agent, or wants a new building block available to the platform. For autonomous hardening with no specific change in mind, use improve-agent.
+description: User-driven loop to change an existing agent in this AgentOS — add a tool/MCP server/toolkit, add a capability (knowledge base, learning/memory, sub-agent, scheduled task), grow the safe Studio registry so components built at runtime gain a new capability, refine its instructions, or fix a specific known bug, verifying each change against the live container. Use whenever the user names a concrete change to an agent, or wants a new building block available to the platform. For autonomous hardening with no specific change in mind, use eval-and-improve.
 ---
 
 # Extend an Agent
 
 > _Coding-agent workflow: run as `/extend-agent` or by describing the task._
 
-The user names a change; you implement it, verify it against the live agent, and ask if there's more. Stop when they say done. The autonomous half is [`improve-agent`](../improve-agent/SKILL.md) — run it afterward.
+The user names a change; you implement it, verify it against the live agent, and ask if there's more. Stop when they say done. The autonomous half is [`eval-and-improve`](../eval-and-improve/SKILL.md) — run it afterward.
 
 The platform is on `http://localhost:8000` (`RUNTIME_ENV=dev`); code edits hot-reload.
 When started with `scripts/dev.sh`, run Python via `.venv/bin/python` with `.env`
@@ -57,8 +57,9 @@ A failing import is a dead platform, not a degraded agent — `app/main.py` impo
 
 Repo-specific rules per branch:
 
-- **Learning / memory** — the lever is `learning=shared_learning` ([`app/learning.py`](../../../app/learning.py)). `enable_user_memories` is not an `Agent` parameter; `enable_agentic_memory` must stay off beside a LearningMachine. Entities are Agno's — don't index them from a second component. `add_history_to_context` replays the session and persists nothing.
-- **Knowledge** — wire `knowledge=shared_knowledge` ([`app/knowledge.py`](../../../app/knowledge.py)) as one object (a list on an agent searches nothing). A product agent gets its own base — see create-agent's product pattern.
+- **Learning / memory** — the lever is `learning=shared_learning` ([`app/registry.py`](../../../app/registry.py)). `enable_user_memories` is not an `Agent` parameter; `enable_agentic_memory` must stay off beside a LearningMachine. Entities are Agno's — don't index them from a second component. `add_history_to_context` replays the session and persists nothing.
+- **Knowledge** — wire `knowledge=shared_knowledge` ([`app/registry.py`](../../../app/registry.py)) as one object (a list on an agent searches nothing). A product agent gets its own base — see create-agent's product pattern.
+- **Shared notes** — import `shared_notes` from `app.registry` and add `shared_notes.tools()` to `tools`. Studio uses the declared toolkit name `filesystem`. Default tools read, write, append, replace, list, search and move PostgreSQL notes. User scoping follows AgentOS user isolation; keep personal profiles in learning and Company knowledge in Company wiki. Do not attach it to end-user product agents.
 - **Sub-agent / context provider** — use `WorkspaceContextProvider`: spread `provider.get_tools()` into `tools=`, append `provider.instructions()` to `INSTRUCTIONS`.
 - **Scheduled task** — [agno scheduler docs](https://docs.agno.com/agent-os/scheduler); `scheduler=True` is already on in `app/main.py`.
 - **Grow the registry** — the bucket you declare into decides how a built component references it (`tool_names`, `model_id`, `knowledge_name`, `learning_name`, `function_name`). Tool names are global to an agent, so a toolkit exposing a name another declared toolkit already has is silently dropped — check first, and give any new toolkit `add_instructions=True` (a built component's instructions are model-written; this is your only usage channel):
@@ -103,7 +104,7 @@ docker logs agentos-api --since 30s 2>&1 | grep -E "Running: \w+\(" | head -40  
 
 A registry change gets one check first — ask `os-manager-internal`: *"Call list_tools and show the row for <tool> exactly as returned — name, buildable, source. Do not create anything."* `buildable: true`, `source: declared` means it landed; `discovered` means it came from boot discovery and a build will refuse it.
 
-**Side effects.** `os-manager-internal` creates and publishes real components on "build me…" prompts, and learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores. Use isolated Cases through `python -m evals` as described in [improve-agent Step 2](../improve-agent/SKILL.md). Never sweep shared data after live probes. Verify HTTP availability separately from model behavior.
+**Side effects.** `os-manager-internal` creates and publishes real components on "build me…" prompts, and learning components (`os-manager-internal`, anything with `learning=`) file what they're told into shared stores. Use isolated Cases through `python -m evals` as described in [eval-and-improve Step 2](../eval-and-improve/SKILL.md). Never sweep shared data after live probes. Verify HTTP availability separately from model behavior.
 
 Did the change land? Yes → Step 7. Almost → one more pass, at most 2–3, then ask how to proceed. Worse → show `git diff` and offer to revert only your patch.
 
@@ -113,4 +114,4 @@ Did the change land? Yes → Step 7. Almost → one more pass, at most 2–3, th
 
 ## 8. Report
 
-One line per accepted change, `git diff --stat` plus the agent-file diff, a suggested commit (`feat(<slug>): …`, `fix(<slug>): …`, `chore(<slug>): refine instructions`), and the next step: [`improve-agent`](../improve-agent/SKILL.md). A registry change also gets a line in [`AGENTS.md`](../../../AGENTS.md)'s registry inventory.
+One line per accepted change, `git diff --stat` plus the agent-file diff, a suggested commit (`feat(<slug>): …`, `fix(<slug>): …`, `chore(<slug>): refine instructions`), and the next step: [`eval-and-improve`](../eval-and-improve/SKILL.md). A registry change also gets a line in [`AGENTS.md`](../../../AGENTS.md)'s registry inventory.

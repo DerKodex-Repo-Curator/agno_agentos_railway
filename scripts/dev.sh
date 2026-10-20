@@ -14,11 +14,10 @@ from db.url import db_url
 
 port = os.environ.get("PORT", "8000")
 os.environ["DATABASE_URL"] = db_url
-os.environ.setdefault("REDIS_URL", f"redis://127.0.0.1:{os.environ.get('REDIS_PORT', '6380')}/0")
 os.environ.setdefault("AGENTOS_URL", f"http://127.0.0.1:{port}")
 os.execvp("uvicorn", [
     "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", port, "--reload",
-    *[arg for folder in ("agents", "app", "db", "evals", "teams", "workflows")
+    *[arg for folder in ("agents", "app", "db", "evals", "teams")
       for arg in ("--reload-dir", folder)],
 ])
 PY

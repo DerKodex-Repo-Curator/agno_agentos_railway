@@ -1,381 +1,222 @@
-## AgentOS: Serve agents over API, MCP, and interfaces like Slack
+# AgentOS
 
-AgentOS is a durable agent runtime that serves agents over API, MCP, and chat interfaces like Slack. Build customer-facing agents and serve them to your users from your product, through AI apps like Claude and ChatGPT, or interfaces like Slack. AgentOS gives you one agent backend for every frontend.
+A small application on top of [Agno](https://github.com/agno-agi/agno): OS Manager,
+Company, PostgreSQL storage, MCP, optional Slack, and coding agents with optional sandboxes.
+Agno owns the manager's members, Studio, authorization, durable execution and sandbox lifecycle.
 
-**Three ways to build agents.**
+## Run locally
 
-1. **Coding agent.** Point a coding agent at the skills in [`.agents/skills/`](.agents/skills/) and it can create, improve and evaluate your agents for you.
-2. **Natural language.** Ask the built-in OS Manager to build agents for you.
-3. **No-code Studio.** Build agents visually using the [AgentOS Studio](https://os.agno.com?utm_source=github&utm_medium=template&utm_campaign=agentos-railway).
-
-**Three ways to serve your agents to your users.**
-
-1. **Your product.** Call the AgentOS REST API from your product.
-2. **AI apps.** Connect your agents to Claude and ChatGPT using the AgentOS MCP server.
-3. **Chat interfaces.** Distribute your agents through Slack, WhatsApp (and more) using AgentOS Interfaces.
-
-**Monitor and govern your agents.**
-
-The [AgentOS Control Plane](https://os.agno.com?utm_source=github&utm_medium=template&utm_campaign=agentos-railway) gives you a unified view of your agent platform. Trace every action. Enforce agent- and tool-level permissions.
-
-<img width="3298" height="2412" alt="AgentOS" src="https://github.com/user-attachments/assets/40a53a42-d4d2-402b-8e92-742609207957" />
-
-<p align="center"><em>Everything runs in your cloud, your data lives in your database.</em></p>
-
-## Get Started
-
-Copy this prompt into your favorite coding agent. It sets up the platform and builds your first agent for you:
-
-```text
-Help me set up my agent platform and build my first agent.
-
-Clone https://github.com/agno-agi/agentos-railway into a folder called agent-platform, cd in, and run the setup-platform skill (in .agents/skills/).
-```
-
-Your coding agent checks Docker, sets up `.env`, boots the platform, verifies the MCP endpoint, connects to the AgentOS UI, then builds your first agent. Prefer to drive yourself? See [Manual Setup](#manual-setup).
-
-## OS Manager and Company
-
-OS Manager (`os-manager-internal`) is the built-in platform agent, served as a team.
-It builds components, reads this application's source, checks operations, and delegates
-Company planning to Agno's built-in Product Manager. Talk to it over HTTP at
-`/teams/os-manager-internal/runs`, through the MCP `agno` tool, or on Slack.
-The template configures it in `app/main.py`; Agno owns its internal members.
-
-Company is enabled by default. Open **Products** in the AgentOS UI to see **This
-AgentOS**, its release-note and local git Sources, Projects and Tasks. Set
-`ENABLE_MAINTENANCE=true` to seed three optional model-backed Routines:
-release intake daily at 09:00 UTC, refresh daily at 10:00 UTC, and summary Mondays at
-11:00 UTC. Intake compares releases with the Agno version read at startup and proposes
-work; proposals still need acceptance. If no newer release applies, a quiet check is
-correct and no Task should be fabricated.
-
-Add another `Product(...)` to `products` in `app/company.py`, or use the same declaration
-under `company.products` in `app/config.yaml`, for example:
-
-```yaml
-company:
-  products:
-    - id: customer-docs
-      name: Customer Docs
-      purpose: Keep our product documentation current
-      metadata: {}
-      sources:
-        - type: website
-          reference: https://docs.example.com
-      routines:
-        - name: Daily refresh
-          template: refresh
-          executor_type: agent
-          executor_id: company-analyst
-          cron_expr: "0 10 * * *"
-          timezone: UTC
-```
-
-Declare all Product metadata together. A later PATCH replaces the entire metadata
-dictionary. For weekly Slack delivery set `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`,
-and `SLACK_SUMMARY_CHANNEL` to the channel ID; the declaration sets
-`metadata.summary = {interface: slack, destination: <channel ID>}`. Without all three,
-the weekly Routine writes a summary to the Product status page. Changing an existing
-Product's declaration does not replace human edits; inspect the saved Product and
-update its complete metadata and Routine instructions deliberately.
-
-## Engineering sandboxes
-
-Sandboxes are optional. With no dev opt-in or production runtime ARN the platform
-boots without engineering executors. When configured, `codex-engineer` and
-`claude-engineer` share the OS database and check out your required `SANDBOX_REPOSITORY`
-(`SANDBOX_BRANCH` defaults to `main`) inside
-`/workspace/repository`. Each session pins its repository; subsequent turns resume it.
-
-For Docker development install `uv`, configure `.env`, then run:
+Requires Docker and an OpenAI API key. Copy the environment file only if absent:
 
 ```sh
-docker compose up -d agentos-db agentos-redis
+[ -f .env ] || cp example.env .env
+# Set OPENAI_API_KEY in .env.
+docker compose up -d --build
+curl -fsS http://localhost:8000/health
+./scripts/mcp_check.sh
+```
+
+The MCP check initializes the connection and verifies the tool names without a model
+call. Supply a prompt to also test OS Manager (spends model calls):
+
+```sh
+./scripts/mcp_check.sh "Without using tools, introduce yourself briefly."
+```
+
+Connect [AgentOS](https://os.agno.com) to `http://localhost:8000` and select OS Manager.
+Its HTTP route is `/teams/os-manager-internal/runs`; its MCP tool is `agno` at `/mcp`.
+The eight built-in MCP tools remain available alongside `agno`.
+Set both Slack credentials to enable the Slack interface.
+
+Local development disables JWT; production requires verification. Never copy
+`RUNTIME_ENV=dev` into an environment file that will sync to production.
+This template runs one API replica with a PostgreSQL durable queue and no Redis.
+
+## Company
+
+The **AgentOS** Product in [app/company.py](app/company.py) represents this deployment:
+useful agents, reliable execution and continuous improvement. Its Sources are Agno
+release notes and the application source. Agno's Product Manager handles planning,
+evidence-backed proposals and status updates through OS Manager.
+
+Ask OS Manager to review relevant releases and recommend the next improvement.
+No maintenance Routines ship by default: the pinned framework cannot use its internal
+Product Manager or OS Manager as a Routine executor. Scheduled maintenance requires
+a supported executor; do not register internal manager members to bypass this restriction.
+
+Declarations seed new records without overwriting saved edits. Before upgrading an
+existing deployment, update the Product's saved name/purpose and disable or retarget
+saved schedules using the removed `company-analyst`, including Release intake,
+Daily refresh, Weekly summary and Weekly review. Inspect saved Studio references too.
+The Product ID remains `this-agentos`. Removing declarations does not delete saved
+Routines or historical work. `ENABLE_MAINTENANCE` is no longer used.
+
+Declare additional Products in `app/company.py` or under `company.products` in
+`app/config.yaml`. On the current dependency pin, Product metadata PATCH replaces
+the dictionary; include all metadata when editing it.
+
+## Engineers
+
+[agents/engineers.py](agents/engineers.py) declares two independent coding agents:
+
+| Agent | Harness | Default model |
+| --- | --- | --- |
+| Claude Engineer (`claude-engineer`) | Claude Code | `claude-opus-5-5` |
+| Codex Engineer (`codex-engineer`) | Codex | `gpt-6.1-sol` |
+
+Models are defined directly in `agents/engineers.py`; edit their `model` arguments to change them.
+Both agents are always registered. Without a sandbox, their harnesses run on the
+AgentOS server in the absolute project root (`/app` in the API container). With a sandbox
+configured, they run in its repository checkout. Invalid sandbox configuration fails
+at startup rather than falling back to the server. Claude on AgentCore uses
+Bedrock; set Claude's `model` argument to an inference profile supported by that account. An
+Engineering team is deferred until framework support and delegation have been tested.
+
+For local Docker sandboxes, run the API on the host so it can reach the Docker daemon:
+
+```sh
+docker compose up -d agentos-db
+./scripts/venv_setup.sh
 ./scripts/build_sandbox_image.sh local
 docker compose stop agentos-api
-SANDBOX_REPOSITORY=https://github.com/your-org/your-repo SANDBOX_ENABLED=true ./scripts/dev.sh
+SANDBOX_ENABLED=true ./scripts/dev.sh
+# From another terminal:
+MCP_CHECK_HOST=1 ./scripts/mcp_check.sh
 ```
 
-The API runs on the host because DockerSandbox needs the host Docker daemon.
-`SANDBOX_IMAGE` defaults to `agno-sandbox:local`, and `SANDBOX_CHECKPOINTS` defaults
-to `./tmp/checkpoints`. `scripts/dev.sh` loads `.env`, exports the local database and
-Redis connection settings, and starts uvicorn with reload. Redis defaults to host
-port 6380 (`REDIS_PORT`); durable jobs are stored in Postgres. The containerized API
-remains available for development without local sandboxes.
+Repository configuration, provider selection and checkpoints live in
+[app/sandbox.py](app/sandbox.py). Edit `REPOSITORY` for your fork; it defaults to this
+template's GitHub repository on `main`. Development checkpoints use the absolute project
+`tmp/checkpoints` directory. Server-hosted or local Claude needs `ANTHROPIC_API_KEY`; Codex uses
+`OPENAI_API_KEY`. Private repository cloning can use `GITHUB_READ_TOKEN`, which enters
+the sandbox. Publication credentials are not configured by this template.
 
-Codex uses `OPENAI_API_KEY`; local Claude uses `ANTHROPIC_API_KEY`. Production Claude
-uses Bedrock through the runtime execution role. `GITHUB_READ_TOKEN` is optional for
-private repositories and must be read-only, restricted to the intended repository.
-`GITHUB_TOKEN` is reserved for future host-side PR publication; it is never forwarded
-to a sandbox. This template does not publish PRs automatically.
+**Current limitation:** the pinned framework requires Redis for sandboxed HTTP runs.
+This template deliberately has no Redis, so sandboxed engineer HTTP runs are blocked
+until Agno supports the single-replica PostgreSQL-only path. Engineers running on the
+AgentOS server do not use that sandbox route.
+The API, OS Manager, Company planning and ordinary durable queue remain available.
+Direct Python harness execution is a separate path and is not verified by API startup.
 
-Production uses AgentCore when `RUNTIME_ENV=prd` and `SANDBOX_RUNTIME_ARN` is set.
-Use **one runtime per deployment**. Configure AWS credentials or `AWS_PROFILE` on the
-API host, plus `AWS_REGION`. Set `SANDBOX_CHECKPOINTS` to a **persistent mounted volume**
-and keep one API replica until an object-store checkpoint store is available.
-Do not use ephemeral `/tmp` for production checkpoints. `railway.json` keeps one replica;
-provision and mount the checkpoint volume before enabling the runtime.
-
-With your own ECR repository and runtime execution role:
+Production uses AgentCore, an ARM64 runtime image, and a persistent checkpoint volume.
+The API does not need a Docker daemon. Build and provision with:
 
 ```sh
-export AWS_PROFILE=your-profile AWS_REGION=us-east-1
-export SANDBOX_IMAGE=YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/your-repo:YOUR_IMMUTABLE_TAG
-export SANDBOX_RUNTIME_NAME=your_deployment
-export SANDBOX_EXECUTION_ROLE=arn:aws:iam::YOUR_ACCOUNT:role/your-runtime-role
+# Set SANDBOX_IMAGE to an ECR URI with an immutable tag,
+# SANDBOX_RUNTIME_NAME and SANDBOX_EXECUTION_ROLE.
 ./scripts/build_sandbox_image.sh push
 ./scripts/create_sandbox_runtime.sh
-# Set the printed ARN as SANDBOX_RUNTIME_ARN on the API deployment.
 ```
 
-The scripts use your AWS credential chain; they select no account or role by default.
-Set a unique `SANDBOX_RUNTIME_NAME` for each deployment (letter first, then letters,
-digits or underscores, at most 48 characters) and `SANDBOX_EXECUTION_ROLE` explicitly.
-Image push builds linux/arm64; local builds use the host architecture. The API
-Dockerfile remains on Python 3.14; the sandbox
-image follows the framework cookbook's pinned Python 3.12 base.
+Set `SANDBOX_RUNTIME_ARN` to the returned ARN and mount a persistent volume at `/data`;
+checkpoints use `/data/checkpoints`. Startup rejects AgentCore without that mount.
+Keep one API replica. Direct engineer runs and Company Task
+acceptance/completion are separate verification gates. The template's current immutable
+pin predates the complete Company sandbox integration; do not bypass framework rejections
+or infer Company readiness from a direct-agent test.
 
-Agno and the sandbox currently pin main commit `2dec52a7e7bf202c3913b1d442220227525ce73a`.
-Move both pins to a release when available. Direct executor runs are separate from
-Company accepting and dispatching sandboxed Tasks; that integration awaits Company
-PR 7.2. After updating the pin, declare a matching GitHub git Source for the executor's
-repository before accepting engineering Tasks; the current Source reads the local
-application. Task checkout projection and the single-engineering-execution gate need
-that integration too. Do not treat a passing direct run as proof of the Company engineering loop.
+## Build agents
 
-## Manual Setup
+Use `/create-agent` to add an agent, `/extend-agent` for a specific change, and
+`/create-evals` plus `/eval-and-improve` for behavioral coverage and hardening.
+OS Manager and Studio can also compose components from [app/registry.py](app/registry.py).
+The palette contains web access, lightweight file generation, a calculator, models,
+learning, knowledge, and shared notes. New runtime capabilities enter this explicit registry.
 
-### Step 1: Run locally
+Import `shared_knowledge`, `shared_learning`, and `shared_notes` from `app.registry`.
+Operator documents use shared knowledge; learning stores per-user profiles and memories.
+Attach `shared_notes.tools()` for a PostgreSQL notebook. Its default tools can read, write,
+append, replace, list, search and move notes. User scoping follows AgentOS user isolation.
+Keep personal profiles in learning and Company knowledge in Company wiki.
+Create a separate knowledge base when adding an end-user product agent; none ships by default.
+Existing product-knowledge data is preserved, but saved Studio components referencing it need
+their knowledge declaration restored or their configuration updated before deployment.
+Register code agents and teams in `app/main.py` and add their
+prompts to `app/config.yaml`. No example workflows or startup schedules ship by default;
+Company uses the framework scheduler.
 
-> **Prerequisite:** [Docker](https://www.docker.com/get-started/) installed and running.
+## Verify and develop
 
 ```sh
-git clone https://github.com/agno-agi/agentos-railway agentos
-cd agentos
-
-# Configure credentials
-cp example.env .env
-# Open .env and set OPENAI_API_KEY
-
-# Run the platform on docker
-docker compose up -d --build
+./scripts/venv_setup.sh
+source .venv/bin/activate
+./scripts/format.sh
+./scripts/validate.sh
+python -m unittest discover -s tests -v
+EVAL_TEST_POSTGRES=true python -m unittest discover -s tests -v
+python -m evals --tag smoke --json-output tmp/evals.json
 ```
 
-Confirm your AgentOS is running at [http://localhost:8000/docs](http://localhost:8000/docs).
+Model evals spend model calls and require PostgreSQL with CREATEDB. Every suite runs
+in a separate process with an owned disposable database; cleanup drops only that
+database after the worker exits. The worker reads a sanitized application source copy.
+It disables Slack and sandboxes and does not start the scheduler. Never run mutating probes on shared data
+or use snapshot/diff deletion. Sandbox cases need a separately contained sandbox fixture.
 
-### Step 2: Connect the AgentOS UI
+The cases in [evals/cases.py](evals/cases.py) check source-backed onboarding, diagnostics,
+and evidence-backed Company proposals. Deterministic scorers inspect tool payloads and
+persisted state. `--json-output` retains the report and a sibling `.evidence.jsonl` before
+the disposable database is removed. Use `--name <case>` to select one case or `--list`
+to inspect the suite without model calls.
 
-1. Open [os.agno.com](https://os.agno.com?utm_source=github&utm_medium=template&utm_campaign=agentos-railway) and sign in.
-2. Click **Connect OS**, enter `http://localhost:8000` as the URL, name it **Local AgentOS**, and connect.
+Dependencies flow from `pyproject.toml` through `scripts/generate_requirements.sh` to
+committed `requirements.txt`. Docker, CI and host setup use those requirements. There
+is no `uv.lock`; use `uv run --no-project` when invoking uv outside the activated venv.
+After changing dependencies, regenerate requirements and rebuild. Keep the Agno commit
+in `pyproject.toml` and `sandbox/Dockerfile` aligned until the required APIs are released.
 
-### Step 3: Build your first agent using natural language
+## Deploy on Railway
 
-1. Click **Chat** under the **OS Manager** team and give it a concrete job: "Create and publish an agent that summarizes pasted text. Use the default model and no tools."
-2. After it confirms publication, click **Refresh**. Select the new agent in the **Agents** dropdown and chat with it.
-
-For a product agent grounded in your documentation, use the coding-agent `/create-agent`
-skill. It handles ingestion into `product-knowledge` and registers the agent. OS Manager
-reads Company Sources through the framework; it does not ingest pages into knowledge.
-
-## Make the platform yours
-
-Your cloned repo points at this public template. Create your own GitHub repo and point your platform at it:
-
-```sh
-git remote rename origin upstream    # keep the template connected for updates
-git remote add origin <your-private-repo-url>
-git push -u origin main
-```
-
-> **Heads up.** Create the private repo first ([github.com/new](https://github.com/new), or `gh repo create <name> --private`). Keep `upstream` connected, so that `git pull upstream main` brings in template updates in the future.
-
-## Run in production
-
-You can run the platform anywhere that supports containers. This codebase comes with scripts to deploy the platform to [Railway](https://railway.com) — and a coding-agent skill, [`/deploy-platform`](.agents/skills/deploy-platform/SKILL.md), that will help you deploy it.
-
-> **Prerequisite:** [Railway CLI](https://docs.railway.com/cli#installing-the-cli) installed and `railway login` completed.
-
-### 1. Set up your production env
-
-Create a new `.env.production` file for production credentials.
-
-```sh
-cp .env .env.production          # or cp example.env .env.production
-# Edit .env.production with production values
-```
-
-Keeping a separate `.env.production` lets us use different values for local and production: different OpenAI keys, production-only credentials, a different Slack workspace.
-
-### 2. Deploy
+Install and authenticate the Railway CLI. Use `/deploy-platform` for the guided path,
+or prepare `.env.production` from `example.env`, set its keys, then run:
 
 ```sh
 ./scripts/railway/up.sh
 ```
 
-This provisions the AgentOS service and Postgres on the same private network. The script pauses and asks for a JWT verification key for authentication (see next section).
-
-### 3. Production Auth
-
-Token-Based Authorization is on by default. Without a `JWT_VERIFICATION_KEY` or `JWT_JWKS_FILE`, the app refuses to serve traffic in production. The platform's job is to keep your data private, so the safe default is "refuse to start" without an authentication token.
-
-Token-Based Auth gives you three things:
-
-1. **No public access.** The server rejects requests without a valid token.
-2. **Per-request identity.** Middleware parses the token and extracts the `user_id`, `session_id`, and custom claims. Each request is tied to a user and session, giving you auditability and traceability.
-3. **Granular permissions.** Scopes on the token decide what each caller can do — run agents, read sessions, manage the platform. Admin tokens can do everything; scoped tokens get exactly what their claims grant.
-
-During `./scripts/railway/up.sh`, the script creates your Railway domain and pauses so you can mint the key before the app starts.
-
-1. Open [os.agno.com](https://os.agno.com?utm_source=github&utm_medium=template&utm_campaign=agentos-railway), click **Connect OS** → **Live**, and enter your Railway domain.
-2. Name it **Live AgentOS**, flip **Token-Based Authorization (JWT)** on and connect. The UI generates your public key. (Ran into an issue? Go to **Settings** → **OS & Security** → **Token-Based Authorization (JWT)** to get the key from the settings page.)
-3. Copy the public key.
-4. Paste the full public key into the `up.sh` prompt. The script saves it into your env file for future syncs:
+The script provisions the API and pgvector database, sets the public URL, and guides
+the JWT verification-key step. Configure JWT verification before serving production
+traffic. Use a persistent volume for AgentCore checkpoints when that sandbox is enabled.
 
 ```sh
-JWT_VERIFICATION_KEY="-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkq...
------END PUBLIC KEY-----"
-```
-
-If you get something wrong, you can re-sync environment variables with `./scripts/railway/env-sync.sh`.
-
-### 4. Verify
-
-You can check the logs on the Railway dashboard, or by running the following command:
-
-```sh
+./scripts/railway/redeploy.sh   # changed code
+./scripts/railway/env-sync.sh   # changed production settings
 railway logs --service agent-os
+./scripts/railway/down.sh      # deletes the project, database and all its data
 ```
 
-### 5. Connect your AgentOS to MCP clients
+For browser MCP clients, connect to `https://<domain>/mcp` using OAuth and the configured
+`MCP_CONNECT_SECRET`. Coding clients can use `uvx agno connect --url https://<domain>`.
+For the authenticated MCP probe, provide an existing JWT or PAT as `MCP_CHECK_TOKEN`;
+the check does not mint accounts. Render remains a separate deployment follow-up.
 
-AgentOS comes with an MCP server at `/mcp` (wired via `mcp=MCPConfig(...)` in [`app/main.py`](app/main.py)), where Agno itself is published as a first-class `agno` tool — clients just call it, no id discovery. There are two ways to connect your AgentOS to MCP clients:
+When upgrading an existing deployment, disable its old `deployment-check` and
+`run-evals` schedules before removing those endpoints. Inspect saved Studio components
+for references to removed functions/toolkits. Migrate references deliberately; do not delete historical state.
 
-1. **AI Apps like Claude and ChatGPT** connect to your AgentOS over the internet using OAuth. Add `https://<railway-domain>/mcp` as a custom connector in the chat app's connector settings. Leave the form's optional OAuth fields (client ID / client secret) empty. Click **Connect** and, on the consent page, enter the `MCP_CONNECT_SECRET` that `up.sh` generated during deploy (saved in `.env.production`).
-2. **Coding agents like Claude Code, Claude Desktop, Codex, and Cursor** connect to your AgentOS via the MCP URL. Register your AgentOS with the MCP clients on your machine:
+## Configuration
 
-```sh
-uvx agno connect --url https://<railway-domain>
-```
+See [example.env](example.env) for copyable settings. No real credentials belong in Git.
 
-After a successful connection, open one of these apps and ask:
-
-```text
-can you access my agentos mcp?
-```
-
-### Redeploy after code changes
-
-To redeploy your AgentOS, run the following command:
-
-```sh
-./scripts/railway/redeploy.sh
-```
-
-Recommended: Auto-deploy on merge to `main` using:
-
-1. Open the Railway dashboard, your project, the agent-os service, **Settings**.
-2. Under **Source**, click **Connect Repo** and pick your repo.
-3. Set the deploy branch to `main` and save.
-
-Push to `main` triggers a build and rolling deploy. `./scripts/railway/env-sync.sh` is still how you sync env changes.
-
-### Sync environment variables
-
-To re-sync environment variables, run the following command:
-
-```sh
-./scripts/railway/env-sync.sh
-```
-
-### Tear down
-
-```sh
-./scripts/railway/down.sh
-```
-
-Deletes the Railway project: the agent-os service, the pgvector database, and its volume, **including all data**. It also comments out the Railway-minted `AGENTOS_URL` and `JWT_VERIFICATION_KEY` in your env file, so a future `up.sh` derives a fresh domain and re-runs its guided key step. Custom domains are preserved.
-
-### Opting out of JWT (not recommended)
-
-Change `authorization=runtime_env != "dev"` to `authorization=False` in [`app/main.py`](app/main.py) and redeploy. Use this only inside a private VPC behind another auth layer. Without it, anyone who guesses your Railway domain can access your platform.
-
-## Using the platform
-
-This platform is designed so that coding agents can drive the entire **create → improve → evaluate → maintain** lifecycle for you.
-
-### Create
-
-Open your coding agent of choice (Claude Code, Codex, Cursor) and run:
-
-```
-/create-agent
-```
-
-It asks a few questions, generates the agent file in `agents/`, registers it in `app/main.py`, adds its description and quick prompts to `app/config.yaml`, restarts the container, and smoke-tests it for you.
-
-### Improve
-
-Improve your agents by running the following skills:
-
-- **`/extend-agent`** — Add a tool, add a capability, refine the instructions, fix a known bug.
-- **`/improve-agent`** — Claude simulates scenarios from the agent's `INSTRUCTIONS` and its real usage recorded in the database, runs them against the live container, judges the responses, and edits until they pass.
-
-### Evaluate
-
-Run the eval suite to check for regressions. The evals live in [`evals/cases.py`](evals/cases.py), and each suite runs in a separate process with a disposable PostgreSQL database.
-The parent removes only its owned database after the worker exits, including on errors
-and timeouts. Existing sessions, Company data, notes and knowledge are never swept.
-The DB role needs CREATEDB privileges. CLI results are ephemeral: using
-`--json-output tmp/evals.json` saves results and tool traces in `tmp/evals.evidence.jsonl`;
-scheduled workflow summaries remain in workflow history.
-The worker reads a sanitized source copy without `.env`, eval answers or local logs;
-sandbox execution, Redis, Slack and media tools are disabled. External read/model calls
-still occur and cost money. Do not add externally mutating tools to eval cases without
-an isolated test account or a contained fixture.
-
-The evals run on the host machine, so set up the venv with `./scripts/venv_setup.sh && source .venv/bin/activate`, then run:
-
-```sh
-python -m evals --tag smoke      # fast checks of the self-driving surfaces
-python -m evals --tag release    # broader pre-release confidence
-python -m evals --name <case>    # one case while iterating
-python -m evals -v               # stream the full run with rich panels
-```
-
-If a case fails, run **`/eval-and-improve`** — it diagnoses each failure, fixes what's in scope, and loops until green.
-
-### Maintain
-
-Because the repo is managed by coding agents, it moves fast. Run `/review-and-improve` before a release or after a refactor: it sweeps for drift between docs, code, and config, auto-fixes mechanical drift like stale paths and missing env vars, and flags anything bigger.
-
-## Environment variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `OPENAI_API_KEY` | yes | none | OpenAI key for models and embeddings. |
-| `RUNTIME_ENV` | no | `prd` | `dev` disables JWT. Compose sets this to `dev` for local — never put it in an env file that syncs to Railway, or production deploys unauthenticated. |
-| `JWT_VERIFICATION_KEY` | prd | none | Public key from os.agno.com. Required when `RUNTIME_ENV=prd`, unless `JWT_JWKS_FILE` is set. |
-| `JWT_JWKS_FILE` | prd | none | Path to a JWKS file; alternative to `JWT_VERIFICATION_KEY` for production JWT verification. |
-| `AGENTOS_URL` | no | `http://127.0.0.1:8000` | Scheduler base URL. `scripts/railway/up.sh` auto-sets it to your Railway domain; set by hand only for a custom domain or tunnel. Also the public origin OAuth metadata derives from when `MCP_CONNECT_SECRET` is set. |
-| `MCP_CONNECT_SECRET` | no | none | If set (≥16 chars, e.g. `openssl rand -base64 32`), `/mcp` becomes its own OAuth 2.1 authorization server so claude.ai and ChatGPT (web) can connect; connecting asks for this secret on a consent page. Requires `AGENTOS_URL`. `scripts/railway/up.sh` auto-generates it on deploy. PAT and JWT bearers keep working alongside. |
-| `AGENTOS_MCP_SIGNING_KEY` | no | none | Optional high-entropy signing-key material (≥32 chars) for OAuth tokens. Unset, a strong key is generated and persisted in the database. Rotating it invalidates outstanding tokens. |
-| `ENABLE_DEPLOY_CHECK` | no | `True` | The reference deployment-check cron runs daily by default. This env var owns the schedule's toggle (re-asserted on every boot); the workflow is runnable on demand regardless. |
-| `EVALS_TAG` | no | `smoke` | Eval tag run by the run-evals workflow. |
-| `EVALS_SUITE_TIMEOUT_SECONDS` | no | `3600` | Whole-suite timeout for the scheduled eval workflow. Per-case timeouts remain defined in each Case. |
-| `PARALLEL_API_KEY` | no | none | Authenticates Agno's and the Studio registry's web search tools (Parallel SDK when set; keyless MCP fallback). Also the fast route for ingesting a product's docs — clean markdown per page, JS-rendered pages and PDFs included; without it ingestion still works, page by page, just slower. |
-| `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` | no | none | Both must be set to enable the Slack interface. Registry sending additionally requires `ENABLE_SLACK_TOOLS=true`. |
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASS` / `DB_DATABASE` | no | matches compose | Postgres connection. |
-| `ENABLE_MAINTENANCE` | no | `false` | Seed the three Company maintenance Routines. Existing saved Routines remain operator-managed; unsetting this does not delete them. |
-| `ENABLE_SLACK_TOOLS` | no | `false` | Add send-only Slack tools to Studio when a bot token is set. Independent of the Slack interface. |
-| `ENABLE_MEDIA_TOOLS` | no | `false` | Add image generation and speech tools using the OpenAI key. |
-| `DB_DRIVER` | no | `postgresql+psycopg` | SQLAlchemy driver. |
-| `AGNO_DEBUG` | no | `False` | If `True`, Agno emits verbose debug logs. Compose sets this for dev. |
-| `WAIT_FOR_DB` | no | `False` | If `True`, the entrypoint blocks on the DB before starting. Compose sets this. |
-
-## Learn more
-
-- [Agno documentation](https://docs.agno.com?utm_source=github&utm_medium=template&utm_campaign=agentos-railway)
-- [AgentOS introduction](https://docs.agno.com/agent-os/introduction?utm_source=github&utm_medium=template&utm_campaign=agentos-railway)
-- [Agno on GitHub](https://github.com/agno-agi/agno). Drop a star if this is useful.
+| Setting | Purpose / default |
+| --- | --- |
+| `OPENAI_API_KEY` | Application model, embeddings and Codex authentication. |
+| `RUNTIME_ENV` | `prd`; Compose/host development set `dev`. |
+| `JWT_VERIFICATION_KEY` / `JWT_JWKS_FILE` | Production JWT verification; choose one. |
+| `AGENTOS_URL` | Scheduler/OAuth origin; default `http://127.0.0.1:8000`. |
+| `MCP_CONNECT_SECRET` | Optional OAuth connect secret, at least 16 characters. |
+| `AGENTOS_MCP_SIGNING_KEY` | Optional high-entropy OAuth signing material, at least 32 characters. If unset, Agno generates and persists a key in PostgreSQL across redeploys. |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_DATABASE` | Defaults: `localhost`, `5432`, `ai`, `ai`, `ai`. |
+| `DB_DRIVER` | `postgresql+psycopg`. |
+| `PARALLEL_API_KEY` | Optional authenticated web access; otherwise keyless MCP. |
+| `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` | Both enable the Slack interface. |
+| `PORT`, `AGNO_DEBUG`, `WAIT_FOR_DB` | Host port (`8000`), debug output, container database wait. |
+| `SANDBOX_ENABLED` | `false`; enable Docker engineering in development. |
+| `SANDBOX_IMAGE` | `agno-sandbox:local` for dev; pushed ECR URI for runtime provisioning. |
+| `SANDBOX_RUNTIME_ARN` | Runs engineers in production AgentCore instead of on the AgentOS server. |
+| `ANTHROPIC_API_KEY`, `GITHUB_READ_TOKEN` | Local Claude and optional private repository read access. |
+| `AWS_REGION`, `AWS_PROFILE` | AgentCore host credentials/region; region defaults to `us-east-1`. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Alternative host AWS credentials. |
+| `SANDBOX_RUNTIME_NAME`, `SANDBOX_EXECUTION_ROLE` | Runtime provisioning name and IAM role. |
+| `MCP_CHECK_HOST`, `MCP_CHECK_TOKEN` | Run the probe on the host; optional existing bearer token. |
+| `EVAL_TEST_POSTGRES` | Enable disposable-database integration tests. |

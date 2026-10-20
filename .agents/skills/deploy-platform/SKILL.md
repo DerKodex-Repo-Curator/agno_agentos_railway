@@ -67,7 +67,7 @@ Name the alternative once, clearly not recommended: `authorization=False` in `ap
 
 Every probe against the public domain, never localhost:
 
-- Provider logs (bounded): clean boot, schedules registered.
+- Provider logs (bounded): clean boot and Company initialized.
 - `/docs` → 200 (excluded from JWT on purpose).
 - `/mcp` → **401** — with `MCP_CONNECT_SECRET` set, plus a `WWW-Authenticate: Bearer resource_metadata="…"` header; without it a plain JSON 401. **200 means the endpoint is open — stop.**
 - `/agents` → **401**. A 200 means `RUNTIME_ENV=dev` reached the synced env — stop and fix.

@@ -7,14 +7,11 @@ from unittest.mock import MagicMock, patch
 
 from evals.scorers import (
     Behavior,
-    Memory,
-    health,
+    Proposal,
+    focused_explanation,
     onboarding,
-    published,
     read_file,
-    recalled_fact,
     searched,
-    source_read,
     successful,
 )
 
@@ -28,11 +25,45 @@ def run(*tools, content="Success", members=None):
 
 
 class ScorerTests(unittest.IsolatedAsyncioTestCase):
-    def test_recall_accepts_typography_but_not_negated_memory(self):
-        self.assertTrue(recalled_fact("You lead the Quillhawk–Meridian rollout."))
-        self.assertTrue(recalled_fact("Quillhawk-Meridian."))
-        self.assertFalse(recalled_fact("I cannot confirm you lead Quillhawk-Meridian."))
-        self.assertFalse(recalled_fact("You lead an unknown rollout."))
+    def test_focused_explanation_counts_delegates_and_rejects_audits(self):
+        answer = (
+            "Agno learning stores useful information outside model weights and retrieves it in later interactions. "
+            "It does not retrain the underlying language model."
+        )
+        check = focused_explanation()
+        check(run(content=answer), None)
+        for response in (
+            run(tool("run_diagnostics", {"ok": True}), content=answer),
+            run(tool("read_file", "Error: missing"), content=answer),
+            run(
+                tool("delegate_task_to_member", "answer"),
+                members=[run(*(tool("read_file", "content") for _ in range(4)))],
+                content=answer,
+            ),
+        ):
+            with self.assertRaises(AssertionError):
+                check(response, None)
+
+    def test_configured_explanation_requires_successful_relevant_read(self):
+        answer = (
+            "app/registry.py configures shared_learning with agentic user profiles and user memories in PostgreSQL. "
+            "It stores information outside model weights and does not retrain the model."
+        )
+        check = focused_explanation(configured=True)
+        for candidate in (
+            tool("read_file", "content", {"path": "app/settings.py"}),
+            tool("read_file", "Error: missing", {"path": "app/registry.py"}),
+        ):
+            with self.assertRaises(AssertionError):
+                check(run(candidate, content=answer), None)
+        check(
+            run(
+                tool("delegate_task_to_member", "answer"),
+                members=[run(tool("read_file", "configuration", {"path": "app/registry.py"}))],
+                content=answer,
+            ),
+            None,
+        )
 
     def test_error_envelopes_are_not_success(self):
         for result in ({"ok": False}, {"error": "missing"}, {"status": "FAILED"}):
@@ -77,14 +108,14 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_readonly_agent_dispatch_requires_persisted_child_evidence(self):
         db = MagicMock()
-        response = run(tool("run_agent", {"run_id": "child"}, {"agent_id": "company-analyst"}))
+        response = run(tool("run_agent", {"run_id": "child"}, {"agent_id": "fixture-reader"}))
         child = {
             "run_id": "child",
-            "agent_id": "company-analyst",
+            "agent_id": "fixture-reader",
             "status": "COMPLETED",
             "tools": [{"tool_name": "read_company_source", "result": "page content", "tool_args": {}}],
         }
-        scorer = Behavior(db, searched("read_company_source"), allow_agent="company-analyst")
+        scorer = Behavior(db, searched("read_company_source"), allow_agent="fixture-reader")
         with patch("evals.scorers.business_state", return_value={}):
             scorer.setup()
             db.get_run.return_value = None
@@ -93,126 +124,53 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue((await scorer.ascore(response)).passed)
             child["agent_id"] = "different-agent"
             self.assertFalse((await scorer.ascore(response)).passed)
-            child["agent_id"] = "company-analyst"
+            child["agent_id"] = "fixture-reader"
             child["tools"] = [{"tool_name": "create_company_project", "result": "created", "tool_args": {}}]
             self.assertFalse((await scorer.ascore(response)).passed)
 
-    def test_health_prose_and_wrong_workflow_cannot_pass(self):
-        db = MagicMock()
-        for response in (
-            run(content="Database PASS"),
-            run(
-                tool(
-                    "run_workflow",
-                    {"workflow_id": "run-evals", "status": "completed", "run_id": "x", "content": "Database Runtime"},
-                )
-            ),
-        ):
-            with self.assertRaises(AssertionError):
-                health(response, db)
-        db.get_run.return_value = None
-        with self.assertRaises(AssertionError):
-            health(
-                run(
+    async def test_proposal_requires_matching_evidence_and_no_execution(self):
+        for defect in (None, "hash", "run", "accepted", "transition", "dispatch", "unrelated_write"):
+            with self.subTest(defect=defect):
+                evidence = {
+                    "source_id": "eval-release-source",
+                    "run_id": "observed-run",
+                    "link": "release.md",
+                    "content_hash": "observed-hash",
+                }
+                task = {
+                    "project_id": "proposal",
+                    "status": "backlog",
+                    "brief": "Use REQUEST_TIMEOUT",
+                    "evidence": [evidence],
+                }
+                response = run(
                     tool(
-                        "run_workflow",
-                        {
-                            "workflow_id": "deployment-check",
-                            "status": "completed",
-                            "run_id": "x",
-                            "content": "Database Runtime",
-                        },
-                    )
-                ),
-                db,
-            )
-
-    def test_failed_and_unrelated_source_reads_cannot_pass(self):
-        db = MagicMock()
-        db.db_engine.connect.return_value.__enter__.return_value.execute.return_value.mappings.return_value = [
-            {"id": "releases", "product_id": "this-agentos", "reference": "https://github.com/agno-agi/agno/releases"}
-        ]
-        url = "https://github.com/agno-agi/agno/releases"
-        good = {"source_id": "releases", "link": url, "content": "Latest v3.1.5", "content_hash": "abc"}
-        cases = [
-            tool("read_company_source", {"data": [{"path": url}]}, {"source_id": "releases"}),
-            tool("read_company_source", good, {"source_id": "wrong", "path": url}),
-            tool("read_company_source", {"ok": False}, {"source_id": "releases", "path": url}),
-            tool("read_company_source", {**good, "content": ""}, {"source_id": "releases", "path": url}),
-        ]
-        for candidate in cases:
-            with self.assertRaises(AssertionError):
-                source_read(run(candidate, content=f"v3.1.5 {url}"), db)
-        source_read(
-            run(tool("read_company_source", good, {"source_id": "releases", "path": url}), content=f"v3.1.5 {url}"), db
-        )
-        with self.assertRaises(AssertionError):
-            source_read(
-                run(tool("read_company_source", good, {"source_id": "releases", "path": url}), content=f"v9.9.9 {url}"),
-                db,
-            )
-
-    def test_health_cannot_use_a_warning_elsewhere_to_hide_wrong_overall_status(self):
-        db = MagicMock()
-        result = {
-            "workflow_id": "deployment-check",
-            "status": "completed",
-            "run_id": "health-run",
-            "content": "Overall: **WARN**\n**PASS** Database: connected\n**WARN** Runtime: dev",
-        }
-        db.get_run.return_value = {"run_data": result}
-        response = run(tool("run_workflow", result), content="Overall: PASS\nDatabase PASS\nRuntime WARN")
-        with self.assertRaises(AssertionError):
-            health(response, db)
-        response.content = "Overall: WARN\nDatabase PASS\nRuntime WARN"
-        health(response, db)
-
-    def test_publication_without_requested_instructions_fails(self):
-        db = MagicMock()
-        db.list_components.return_value = ([{"component_id": "a", "current_version": 1}], 1)
-        spec = {"name": "Recipes", "model": "default", "instructions": "Do arithmetic"}
-        config = {
-            "stage": "published",
-            "version": 1,
-            "config": spec,
-        }
-        db.get_config.return_value = config
-        response = run(tool("create_agent", {"component_id": "a"}), content="Published the recipe agent")
-        check = published("Recipes", instruction_patterns=(r"recipe", r"\b(three|3)\b", r"\b(source|link|url)s?\b"))
-        with self.assertRaises(AssertionError):
-            check(response, db)
-        spec["instructions"] = "Find three recipes and include source links."
-        check(response, db)
-
-    def test_draft_and_wrong_published_pointer_fail(self):
-        db = MagicMock()
-        row = {"component_id": "a", "current_version": 1}
-        db.list_components.return_value = ([row], 1)
-        config = {"stage": "draft", "version": 1, "config": {"name": "Test", "model": "default"}}
-        db.get_config.return_value = config
-        response = run(tool("create_agent", {"component_id": "a"}), content="Created and published")
-        with self.assertRaises(AssertionError):
-            published("Test")(response, db)
-        config["stage"] = "published"
-        published("Test")(response, db)
-        row["current_version"] = 2
-        with self.assertRaises(AssertionError):
-            published("Test")(response, db)
-
-    def test_missing_search_tools_and_replacement_rename_fail(self):
-        db = MagicMock()
-        db.list_components.return_value = ([{"component_id": "a", "current_version": 2}], 1)
-        db.get_config.return_value = {
-            "stage": "published",
-            "version": 2,
-            "config": {"name": "After", "model": "default"},
-        }
-        response = run(tool("create_agent", {"component_id": "a"}))
-        with self.assertRaises(AssertionError):
-            published("After", tools_required=True)(response, db)
-        response.tools.append(tool("edit_agent", {"component_id": "replacement"}, {"agent_id": "replacement"}))
-        with self.assertRaises(AssertionError):
-            published("After", renamed_from="Before")(response, db)
+                        "read_company_source",
+                        {"content": "Use REQUEST_TIMEOUT", "link": "release.md", "content_hash": "observed-hash"},
+                        {"source_id": "eval-release-source"},
+                    ),
+                    tool("intake_company_source", {"task_id": "task"}),
+                )
+                response.run_id = "observed-run"
+                db = MagicMock(db_schema="ai", projects_table_name="projects", tasks_table_name="tasks")
+                db.get_projects.return_value = ([{"id": "proposal", "status": "proposed"}], 1)
+                db.get_tasks.return_value = ([task], 1)
+                state = {}
+                if defect == "hash":
+                    evidence["content_hash"] = "fabricated-hash"
+                elif defect == "run":
+                    evidence["run_id"] = "different-run"
+                elif defect == "accepted":
+                    task["accepted_by"] = "someone"
+                elif defect == "transition":
+                    task["transitions"] = [{"to": "running"}]
+                elif defect == "dispatch":
+                    response.tools.append(tool("run_agent", {"ok": False}, error=True))
+                elif defect == "unrelated_write":
+                    state = {"ai.products": ["unexpected change"]}
+                with patch("evals.scorers.business_state", return_value=state):
+                    score = await Proposal(db).ascore(response)
+                self.assertEqual(score.passed, defect is None, score.reason)
 
     def test_onboarding_requires_grounded_actionable_paths(self):
         response = run(
@@ -228,30 +186,6 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AssertionError):
             onboarding(response, None)
 
-    def test_rename_preserves_configuration_and_published_history(self):
-        db = MagicMock()
-        db.list_components.return_value = ([{"component_id": "original", "current_version": 2}], 1)
-        first = {
-            "stage": "published",
-            "version": 1,
-            "config": {"name": "Before", "model": "default", "instructions": "Summarize"},
-        }
-        final = {
-            "stage": "published",
-            "version": 2,
-            "config": {"name": "After", "model": "default", "instructions": "Summarize"},
-        }
-        response = run(
-            tool("create_agent", {"data": {"id": "original"}}),
-            tool("edit_agent", {"data": {"id": "original"}}, {"agent_id": "original"}),
-        )
-        db.get_config.side_effect = [final, first]
-        published("After", renamed_from="Before")(response, db)
-        final["config"] = {"name": "After", "model": "default", "instructions": "Do something else"}
-        db.get_config.side_effect = [final, first]
-        with self.assertRaises(AssertionError):
-            published("After", renamed_from="Before")(response, db)
-
     def test_read_file_must_match_and_succeed(self):
         for candidate in (
             tool("read_file", "content", {"path": "tmp/answers.md"}),
@@ -259,27 +193,6 @@ class ScorerTests(unittest.IsolatedAsyncioTestCase):
         ):
             with self.assertRaises(AssertionError):
                 read_file("README.md")(run(candidate), None)
-
-    async def test_memory_acknowledgement_without_persistence_fails(self):
-        db = MagicMock()
-        db.get_learnings.return_value = []
-        team = NS(user_id="isolated")
-        score = await Memory(db, team).ascore(run(content="I will remember Quillhawk-Meridian"))
-        self.assertFalse(score.passed)
-
-    async def test_memory_requires_fresh_session_recall(self):
-        db = MagicMock()
-        db.get_learnings.return_value = [{"fact": "Quillhawk-Meridian"}]
-        seen = []
-
-        async def recall(prompt, session_id):
-            seen.append((prompt, session_id))
-            return NS(content="I do not know")
-
-        score = await Memory(db, NS(user_id="isolated", arun=recall)).ascore(run())
-        self.assertFalse(score.passed)
-        self.assertNotIn("Quillhawk-Meridian", seen[0][0])
-        self.assertTrue(seen[0][1])
 
 
 if __name__ == "__main__":

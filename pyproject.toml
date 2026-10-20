@@ -10,12 +10,10 @@ authors = [{ name = "Agno", email = "hello@agno.com" }]
 dependencies = [
   # Move this main pin to a released version after the Company/sandbox release.
   "agno[os,mcp,slack,pgvector,psycopg,csv,excel,docx,pdf,website,claude,codex,agentcore-sandbox] @ git+https://github.com/agno-agi/agno@2dec52a7e7bf202c3913b1d442220227525ce73a#subdirectory=libs/agno",
-  "redis",
   "cel-python",
   "openai",
   "parallel-web",
   "python-dotenv",
-  "reportlab",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +24,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["agents*", "app*", "db*", "evals*", "teams*", "workflows*"]
+include = ["agents*", "app*", "db*", "evals*", "teams*"]
 namespaces = false
 
 [tool.ruff]

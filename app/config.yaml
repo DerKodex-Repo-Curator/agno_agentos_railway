@@ -1,25 +1,13 @@
 manifest:
   os-manager-internal:
-    description: "OS Manager builds agents, checks this platform, and coordinates Company work."
+    description: "Builds agents, monitors the platform, coordinates work."
     quick_prompts:
       - "What can you build?"
       - "Is the platform healthy?"
-      - "How does learning work?"
-      - "Create and publish an agent that summarizes pasted text using the default model and no tools"
-      - "What needs my attention today?"
-      - "Propose the next three Tasks for This AgentOS"
-      - "Which Routines failed in the last day?"
-  company-analyst:
-    description: "Reads release Sources and proposes evidence-backed Projects and Tasks."
+      - "What is the most useful improvement for this AgentOS?"
+  claude-engineer:
     quick_prompts:
-      - "What needs my attention today?"
-      - "Propose the next three Tasks for This AgentOS"
-      - "Which Routines failed in the last day?"
-  deployment-check:
-    description: "Readiness check: database, credentials, auth, scheduler, MCP, Slack. No model calls."
+      - "Tell me about this codebase"
+  codex-engineer:
     quick_prompts:
-      - "Run the deployment check"
-  run-evals:
-    description: "Runs the eval cases tagged by EVALS_TAG (default: smoke). Disabled by default."
-    quick_prompts:
-      - "Run the eval suite (spends model calls)"
+      - "Tell me about this codebase"
